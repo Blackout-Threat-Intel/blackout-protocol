@@ -34,6 +34,87 @@ You'll see fields like `url`, `referrer`, `fbp`, `hs_hubspotutk` being exfiltrat
 
 ---
 
+## GTM THREAT INTELLIGENCE
+
+### The GTM Stack Attack Surface
+
+Your Go-To-Market stack is a liability. Every script you install creates an exfiltration vector:
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                    GTM STACK ATTACK SURFACE                          │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                      │
+│   YOUR WEBSITE                                                       │
+│   ┌───────────────────────────────────────────────────────────┐     │
+│   │                                                            │     │
+│   │   ┌─────────┐ ┌─────────┐ ┌─────────┐ ┌─────────┐        │     │
+│   │   │ HubSpot │ │ RB2B    │ │ 6sense  │ │ Bombora │  ...   │     │
+│   │   └────┬────┘ └────┬────┘ └────┬────┘ └────┬────┘        │     │
+│   │        │           │           │           │              │     │
+│   │        ▼           ▼           ▼           ▼              │     │
+│   │   ┌─────────────────────────────────────────────────┐    │     │
+│   │   │         VISITOR DATA EXFILTRATION               │    │     │
+│   │   │  • Identity (IP, device, browser fingerprint)   │    │     │
+│   │   │  • Intent (pages visited, time on site)         │    │     │
+│   │   │  • Attribution (referrer, UTMs, campaigns)      │    │     │
+│   │   │  • Cross-site (FB pixels, cookies, tokens)      │    │     │
+│   │   └─────────────────────────────────────────────────┘    │     │
+│   │                          │                                │     │
+│   └──────────────────────────┼────────────────────────────────┘     │
+│                              ▼                                       │
+│   ┌─────────────────────────────────────────────────────────────┐   │
+│   │                  VENDOR DATA NETWORKS                         │   │
+│   │  ┌──────────────┐ ┌──────────────┐ ┌──────────────┐         │   │
+│   │  │ Retention.com│ │ Data Brokers │ │ Ad Networks  │         │   │
+│   │  │ Network      │ │              │ │              │         │   │
+│   │  └──────────────┘ └──────────────┘ └──────────────┘         │   │
+│   │                                                               │   │
+│   │  Your audience data becomes THEIR product                    │   │
+│   └─────────────────────────────────────────────────────────────┘   │
+│                                                                      │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+### Threat Categories in GTM Vendors
+
+| Category | Description | Risk Level |
+|----------|-------------|------------|
+| **Visitor Deanonymization** | IP-to-person identification (RB2B, Clearbit Reveal, 6sense) | CRITICAL |
+| **Intent Data Aggregation** | Cross-site behavioral profiling (Bombora, G2) | HIGH |
+| **Cookie Syncing** | Cross-platform identity correlation (LiveRamp, The Trade Desk) | CRITICAL |
+| **Form Enrichment** | Pre-fill with third-party data (Clearbit, ZoomInfo) | MEDIUM |
+| **Session Recording** | Full DOM/interaction capture (Hotjar, FullStory) | HIGH |
+| **Chat/Bot Platforms** | Conversation data extraction (Drift, Intercom) | MEDIUM |
+
+### The Kill Chain: How Vendors Extract Value
+
+Adapted from Lockheed Martin's Cyber Kill Chain for GTM threats:
+
+| Phase | Traditional Cyber | GTM Vendor Parallel |
+|-------|-------------------|---------------------|
+| **1. Reconnaissance** | Target research | Visitor fingerprinting |
+| **2. Weaponization** | Payload creation | Script obfuscation |
+| **3. Delivery** | Phishing/exploit | Tag manager injection |
+| **4. Exploitation** | Code execution | API hook installation |
+| **5. Installation** | Persistence | Cookie/localStorage drops |
+| **6. Command & Control** | C2 channel | Beacon endpoints |
+| **7. Actions on Objectives** | Data theft | Behavioral graph monetization |
+
+### Why Traditional Security Misses This
+
+1. **Scripts are "legitimate"** — They're installed by your own marketing team
+2. **Traffic is HTTPS** — Encrypted, passes through firewalls
+3. **Domains are trusted** — AWS, CloudFront, Cloudflare
+4. **No malware signatures** — It's "analytics," not malware
+5. **Defeat devices** — Scripts disable during security scans
+
+**Your SIEM sees nothing. Your EDR sees nothing. Your pentest sees nothing.**
+
+The only visibility is at the browser edge, before data leaves.
+
+---
+
 ## THREAT OVERVIEW
 
 ### What RB2B Does
