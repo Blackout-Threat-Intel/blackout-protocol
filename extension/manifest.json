@@ -1,0 +1,37 @@
+{
+  "manifest_version": 3,
+  "name": "BLACKOUT Protocol",
+  "version": "1.0.0",
+  "description": "Zero-trust network interception for blocking surveillance trackers. Your users deserve to be invisible.",
+
+  "permissions": [
+    "scripting",
+    "activeTab"
+  ],
+
+  "host_permissions": [
+    "<all_urls>"
+  ],
+
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content-loader.js"],
+      "run_at": "document_start",
+      "all_frames": true
+    }
+  ],
+
+  "web_accessible_resources": [
+    {
+      "resources": ["blackout.bundle.js"],
+      "matches": ["<all_urls>"]
+    }
+  ],
+
+  "icons": {
+    "16": "icons/icon-16.png",
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png"
+  }
+}

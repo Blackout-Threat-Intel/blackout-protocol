@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BLACKOUT Protocol - Callbacks Example</title>
+
+  <!-- Load bundle without auto-init -->
+  <script src="../../extension/blackout.bundle.js"></script>
+
+  <script>
+    // Custom initialization with callbacks
+    Blackout.initBlackout({
+      debug: true,
+
+      // Custom patterns to block (in addition to defaults)
+      additionalPatterns: [
+        '*.custom-tracker.com',
+        'analytics.example.com'
+      ],
+
+      // Callback fired for every blocked request
+      onBlock: function(result) {
+        console.log('%c[CUSTOM HANDLER] Blocked request:', 'color: #FF6B00; font-weight: bold');
+        console.log('  URL:', result.url);
+        console.log('  Pattern:', result.matchedPattern);
+        console.log('  Time:', new Date(result.timestamp).toISOString());
+
+        // Example: Send to your own logging
+        // fetch('/api/security-log', {
+        //   method: 'POST',
+        //   body: JSON.stringify({
+        //     event: 'tracker_blocked',
+        //     url: result.url,
+        //     pattern: result.matchedPattern
+        //   })
+        // });
+
+        // Example: Update UI
+        updateBlockCounter();
+      }
+    });
+
+    function updateBlockCounter() {
+      const stats = Blackout.getStats();
+      const counter = document.getElementById('block-counter');
+      if (counter) {
+        counter.textContent = stats.blockedCount;
+      }
+    }
+  </script>
+</head>
+<body>
+  <h1>BLACKOUT Protocol - Custom Callbacks</h1>
+
+  <div style="background: #1a1a2e; color: #CCFF00; padding: 20px; border-radius: 8px; font-family: monospace;">
+    <h2 style="margin: 0;">Requests Blocked: <span id="block-counter">0</span></h2>
+  </div>
+
+  <h2>Test Blocking</h2>
+  <button onclick="triggerBlocks()">Trigger Test Requests</button>
+  <button onclick="showLog()">Show Block Log</button>
+
+  <pre id="output" style="background: #f5f5f5; padding: 15px; overflow: auto;"></pre>
+
+  <script>
+    const output = document.getElementById('output');
+
+    function triggerBlocks() {
+      output.textContent = 'Sending test requests...\n\n';
+
+      // These will be blocked
+      fetch('https://api.rb2b.com/collect', { method: 'POST', body: '{}' });
+      fetch('https://track.rb2b.com/event', { method: 'POST', body: '{}' });
+      navigator.sendBeacon('https://pixel.rb2b.com/track', '{}');
+
+      // Custom pattern we added
+      fetch('https://analytics.example.com/track', { method: 'POST', body: '{}' });
+
+      output.textContent += 'Requests sent. Check console for callback output.\n';
+    }
+
+    function showLog() {
+      const log = Blackout.getBlockLog();
+      output.textContent = 'Block Log:\n\n';
+      log.forEach(function(entry) {
+        output.textContent += JSON.stringify(entry, null, 2) + '\n\n';
+      });
+    }
+  </script>
+</body>
+</html>

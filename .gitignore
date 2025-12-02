@@ -1,0 +1,27 @@
+# Dependencies
+node_modules/
+
+# Build artifacts (keep for distribution)
+# dist/
+# extension/blackout.bundle.js
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Logs
+*.log
+npm-debug.log*
+
+# Environment
+.env
+.env.local
+
+# Test coverage
+coverage/

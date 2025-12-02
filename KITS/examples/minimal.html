@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BLACKOUT Protocol - Minimal Example</title>
+
+  <!-- BLACKOUT Protocol - Load FIRST, before any tracking scripts -->
+  <script src="../../extension/blackout.bundle.js" data-auto-init data-debug></script>
+
+  <!-- Example: RB2B tracking script (will be blocked) -->
+  <!-- <script src="https://cdn.rb2b.com/pixel.js"></script> -->
+</head>
+<body>
+  <h1>BLACKOUT Protocol Demo</h1>
+  <p>Open your browser's Developer Console (F12) to see BLACKOUT in action.</p>
+
+  <h2>Test Blocking</h2>
+  <button onclick="testFetch()">Test fetch()</button>
+  <button onclick="testXHR()">Test XHR</button>
+  <button onclick="testBeacon()">Test sendBeacon()</button>
+  <button onclick="showStats()">Show Stats</button>
+
+  <pre id="output"></pre>
+
+  <script>
+    const output = document.getElementById('output');
+
+    function log(msg) {
+      output.textContent += msg + '\n';
+      console.log(msg);
+    }
+
+    function testFetch() {
+      log('Testing fetch to api.rb2b.com...');
+      fetch('https://api.rb2b.com/collect', {
+        method: 'POST',
+        body: JSON.stringify({ test: true })
+      })
+      .then(r => r.json())
+      .then(data => log('Response: ' + JSON.stringify(data)))
+      .catch(e => log('Error: ' + e.message));
+    }
+
+    function testXHR() {
+      log('Testing XHR to track.rb2b.com...');
+      const xhr = new XMLHttpRequest();
+      xhr.open('POST', 'https://track.rb2b.com/event');
+      xhr.onload = function() {
+        log('XHR Response: ' + xhr.responseText);
+      };
+      xhr.onerror = function() {
+        log('XHR Error');
+      };
+      xhr.send(JSON.stringify({ event: 'test' }));
+    }
+
+    function testBeacon() {
+      log('Testing sendBeacon to pixel.rb2b.com...');
+      const result = navigator.sendBeacon(
+        'https://pixel.rb2b.com/track',
+        JSON.stringify({ beacon: true })
+      );
+      log('sendBeacon returned: ' + result);
+    }
+
+    function showStats() {
+      const stats = Blackout.getStats();
+      log('Stats: ' + JSON.stringify(stats, null, 2));
+    }
+
+    log('BLACKOUT Protocol loaded. Click buttons to test blocking.');
+  </script>
+</body>
+</html>

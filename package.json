@@ -1,0 +1,51 @@
+{
+  "name": "blackout-protocol",
+  "version": "1.0.0",
+  "description": "Client-side network interception for blocking surveillance trackers. Zero traffic escapes.",
+  "type": "module",
+  "main": "dist/index.js",
+  "module": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "bin": {
+    "blackout-protocol": "./dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "extension",
+    "src"
+  ],
+  "scripts": {
+    "build": "npm run build:lib && npm run build:cli && npm run build:extension",
+    "build:lib": "esbuild src/index.ts --bundle --outfile=dist/index.js --format=esm --platform=browser",
+    "build:cli": "esbuild src/cli.ts --bundle --outfile=dist/cli.js --format=cjs --platform=node --banner:js=\"#!/usr/bin/env node\"",
+    "build:extension": "esbuild src/index.ts --bundle --outfile=extension/blackout.bundle.js --format=iife --global-name=Blackout",
+    "build:minify": "esbuild src/index.ts --bundle --outfile=extension/blackout.min.js --format=iife --global-name=Blackout --minify",
+    "watch": "esbuild src/index.ts --bundle --outfile=extension/blackout.bundle.js --format=iife --global-name=Blackout --watch",
+    "clean": "rm -rf dist extension/*.js"
+  },
+  "keywords": [
+    "blackout",
+    "privacy",
+    "security",
+    "tracker-blocker",
+    "surveillance",
+    "rb2b",
+    "gtm",
+    "martech",
+    "zero-trust"
+  ],
+  "author": "Blackout Threat Intel",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Blackout-Threat-Intel/blackout-protocol.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Blackout-Threat-Intel/blackout-protocol/issues"
+  },
+  "homepage": "https://github.com/Blackout-Threat-Intel/blackout-protocol#readme",
+  "devDependencies": {
+    "esbuild": "^0.24.0",
+    "typescript": "^5.0.0"
+  }
+}
