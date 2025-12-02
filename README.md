@@ -8,251 +8,89 @@
 ██████╔╝███████╗██║  ██║╚██████╗██║  ██╗╚██████╔╝╚██████╔╝   ██║
 ╚═════╝ ╚══════╝╚═╝  ╚═╝ ╚═════╝╚═╝  ╚═╝ ╚═════╝  ╚═════╝    ╚═╝
 
-                    ▓▓ THREAT NEUTRALIZED ▓▓
+              ▓▓ THREAT INTELLIGENCE HUB ▓▓
 ```
 
-**Zero-trust network interception for blocking surveillance trackers.**
+**Public repository for GTM security research, threat playbooks, and vendor intelligence.**
 
-For too long, the "tax" for identifying a visitor on your website has been your entire audience's behavioral graph.
-
-They give you a name.
-They take... everything else.
-
-**We just reversed the flow.**
+This is the open-source arm of [BLACKOUT](https://www.deployblackout.com) — CrowdStrike for your GTM Stack.
 
 ---
 
-## What It Does
+## What's Here
 
-BLACKOUT Protocol intercepts all outbound network requests at the browser level and blocks surveillance trackers from ever reaching their servers. Synthetic `200 OK` responses ensure your site doesn't break.
+This repository contains **technical findings, IOCs, and remediation playbooks** for threats discovered in the marketing vendor ecosystem. Everything here is public. No gate. No email.
 
-```
-┌─────────────────────────────────────────────────────────┐
-│  BEFORE BLACKOUT                                        │
-│  ═══════════════                                        │
-│  Your Site → Vendor → Identity + Behavioral Graph       │
-│              (they keep everything)                     │
-├─────────────────────────────────────────────────────────┤
-│  AFTER BLACKOUT                                         │
-│  ══════════════                                         │
-│  Your Site → BLACKOUT → Vendor                          │
-│              ▓▓ BLOCKED ▓▓                              │
-│                                                         │
-│  Surveillance: ████ SEVERED                             │
-│  Your Users:   INVISIBLE                                │
-└─────────────────────────────────────────────────────────┘
-```
+| Directory | Contents |
+|-----------|----------|
+| **[FRAMEWORK/](./FRAMEWORK/)** | Threat models, architecture analysis, remediation playbooks |
+| **[KITS/](./KITS/)** | Deployment guides and implementation references |
 
 ---
 
-## Quick Start
+## Latest: RB2B Threat Playbook
 
-### Option 1: Script Tag (Fastest)
+**[FRAMEWORK/REMEDIATION-PLAYBOOK.md](./FRAMEWORK/REMEDIATION-PLAYBOOK.md)**
 
-```html
-<script src="https://unpkg.com/blackout-protocol/extension/blackout.bundle.js" data-auto-init></script>
+Complete analysis of RB2B (Retention.com) visitor deanonymization infrastructure:
+
+- **IOCs** — Domains, cookies, scripts, API endpoints
+- **Defeat Device Evidence** — The devil's regex, 45+ bot signatures, browser fingerprint checks
+- **Keep vs Nuke Fields** — What's needed for identification vs. what they monetize
+- **Architecture Maps** — CloudFront → S3 → API Gateway exfiltration path
+- **Remediation Options** — From removal to selective data stripping
+- **Legal References** — GDPR, FTC, TCPA, defeat device precedent
+
+### The Devil's Regex
+
+```javascript
+/bot\b|spider|crawler|scraper|fetcher|monitor|checker|validator|analyzer|automated|headless|phantom|selenium|webdriver|puppeteer|playwright/i
 ```
 
-### Option 2: npm
+They detect `monitor`, `checker`, `validator`, `analyzer`. Your audit shows clean. Real users get full surveillance.
 
-```bash
-npm install blackout-protocol
-```
-
-```typescript
-import { initBlackout, getStats } from 'blackout-protocol'
-
-initBlackout({ debug: true })
-
-// Check what's being blocked
-console.log(getStats())
-// { active: true, blockedCount: 42, patterns: 18, version: '1.0.0' }
-```
-
-### Option 3: Chrome Extension (Sideload)
-
-1. Download this repo
-2. Go to `chrome://extensions`
-3. Enable "Developer mode"
-4. Click "Load unpacked"
-5. Select the `extension/` folder
+[Read the full playbook →](./FRAMEWORK/REMEDIATION-PLAYBOOK.md)
 
 ---
 
-## Kill List
+## Verify Our Claims
 
-These domains are blocked by default:
+We encourage independent verification. If we're wrong, file an issue.
 
-| Domain | Status |
-|--------|--------|
-| `rb2b.com` | BLOCKED |
-| `*.rb2b.com` | BLOCKED |
-| `api.rb2b.com` | BLOCKED |
-| `cdn.rb2b.com` | BLOCKED |
-| `track.rb2b.com` | BLOCKED |
-| `pixel.rb2b.com` | BLOCKED |
-| `events.rb2b.com` | BLOCKED |
-| `data.rb2b.com` | BLOCKED |
-| `collect.rb2b.com` | BLOCKED |
-| `rb2b.io` | BLOCKED |
-| `*.rb2b.io` | BLOCKED |
-| `rb2b.net` | BLOCKED |
-| `*.rb2b.net` | BLOCKED |
-| `ddwl4m2hdecbv.cloudfront.net` | BLOCKED |
-
-**Zero traffic escaped. Synthetic 200 OK returned.**
+1. Install RB2B on a test page
+2. Open DevTools → Network tab
+3. Filter by `execute-api` or `cloudfront.net/b/`
+4. Observe the payload fields
+5. Compare to our Keep vs Nuke list
 
 ---
 
-## API Reference
+## About BLACKOUT
 
-### `initBlackout(config?)`
+**BLACKOUT** is agentless, outside-in GTM stack security.
 
-Initialize BLACKOUT and start intercepting requests.
+- Map what's running
+- Prove what it does
+- Give you the evidence
 
-```typescript
-initBlackout({
-  debug: true,                        // Log blocked requests
-  additionalPatterns: ['*.evil.com'], // Extend kill list
-  onBlock: (result) => {              // Callback on block
-    console.log('Blocked:', result.url)
-  }
-})
-```
+Every day without visibility is another day of regulatory exposure.
 
-### `disableBlackout()`
-
-Restore original browser APIs.
-
-### `getStats()`
-
-```typescript
-{
-  active: boolean      // Is BLACKOUT running?
-  blockedCount: number // Total requests blocked
-  patterns: number     // Kill list size
-  version: string      // Library version
-}
-```
-
-### `wouldBlock(url)`
-
-Test if a URL would be blocked without making a request.
-
-```typescript
-wouldBlock('https://api.rb2b.com/collect') // true
-wouldBlock('https://example.com')          // false
-```
-
-### `addPatterns(patterns)`
-
-Extend the kill list at runtime.
-
-```typescript
-addPatterns(['*.newtracker.io', 'spy.example.com'])
-```
-
-### `getBlockLog()`
-
-Get full history of blocked requests.
-
-```typescript
-[
-  {
-    timestamp: 1701234567890,
-    url: 'https://api.rb2b.com/collect',
-    type: 'fetch',
-    matchedPattern: '*.rb2b.com'
-  }
-]
-```
+**Website:** [deployblackout.com](https://www.deployblackout.com)
 
 ---
 
-## How It Works
+## Contributing
 
-BLACKOUT shims three browser APIs at the network layer:
+Found a new threat? Have evidence to add?
 
-1. **`fetch()`** - Modern HTTP requests
-2. **`XMLHttpRequest`** - Legacy AJAX
-3. **`navigator.sendBeacon()`** - Analytics beacons
+- **File an issue** with IOCs and evidence
+- **Submit a PR** with documented findings
+- **Reach out** via [deployblackout.com](https://www.deployblackout.com)
 
-Every outbound request is evaluated against the kill list. Matches get blocked and receive a synthetic successful response. The calling code never knows the request was intercepted.
-
-```
-Request → PolicyEngine.evaluate(url)
-              │
-              ├─ ALLOW → Original API
-              │
-              └─ BLOCK → MockFactory.createResponse()
-                         └─ { status: 200, body: { success: true } }
-```
-
----
-
-## Architecture
-
-```
-blackout-protocol/
-├── src/
-│   ├── index.ts           # Public API
-│   ├── types.ts           # TypeScript definitions
-│   ├── policy-engine.ts   # Kill list + pattern matching
-│   ├── network-sniffer.ts # fetch/XHR/beacon shims
-│   ├── mock-factory.ts    # Synthetic response generator
-│   └── cli.ts             # Terminal display
-├── extension/
-│   ├── manifest.json      # Chrome MV3 manifest
-│   ├── content-loader.js  # Injection script
-│   └── blackout.bundle.js # Compiled bundle
-├── FRAMEWORK/             # Methodology documentation
-├── KITS/                  # Deployment guides
-└── ASSETS/                # Branding
-```
-
----
-
-## CLI
-
-```bash
-npx blackout-protocol           # Show status
-npx blackout-protocol kill      # Show kill confirmation
-npx blackout-protocol help      # Usage info
-```
-
-Output:
-```
-  BLACKOUT v1.0.0
-
-  ██ THREAT DETECTED ██
-  RB2B SURVEILLANCE
-  ▓▓ NEUTRALIZED ▓▓
-
-  KILL LIST:
-
-  ░ rb2b.com                     BLOCKED
-  ░ *.rb2b.com                   BLOCKED
-  ░ api.rb2b.com                 BLOCKED
-  ...
-
-  Zero traffic escaped.
-  Synthetic 200 OK returned.
-```
-
----
-
-## Documentation
-
-- **[FRAMEWORK/](./FRAMEWORK/)** - The Doctrine: Zero-Trust GTM methodology
-- **[KITS/](./KITS/)** - Deployment guides for GTM, script tags, extensions
-
----
-
-## Trust is Good. Enforcement is Better.
-
-This is a new architecture for GTM Security.
-
-**Your users deserve to be invisible.**
+All submissions should include:
+- Reproducible evidence (HAR files, screenshots, decoded payloads)
+- IOC list (domains, cookies, scripts)
+- Timeline of discovery
 
 ---
 
@@ -263,6 +101,7 @@ MIT License - See [LICENSE](./LICENSE)
 ---
 
 <p align="center">
-  <strong>▓▓ BLACKOUT PROTOCOL ▓▓</strong><br>
-  <em>THREAT NEUTRALIZED</em>
+  <strong>▓▓ BLACKOUT ▓▓</strong><br>
+  <em>Trust is good. Enforcement is better.</em><br><br>
+  <a href="https://www.deployblackout.com">deployblackout.com</a>
 </p>
