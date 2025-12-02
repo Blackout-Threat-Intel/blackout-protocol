@@ -329,56 +329,65 @@ The **API Gateway** (`*.execute-api.us-west-2.amazonaws.com/b2b`) is where:
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-**Implementation** (Conceptual - Service Worker):
+**Implementation**: Full Chrome extension available at [`/GREYOUT`](../GREYOUT/)
+
+### Quick Install
+
+1. Download the `GREYOUT` folder
+2. Open Chrome → `chrome://extensions`
+3. Enable **Developer mode**
+4. Click **Load unpacked** → select `GREYOUT` folder
+5. Badge shows "ON" when active
+
+### How It Works
+
+The extension wraps `fetch()`, `XMLHttpRequest`, and `sendBeacon()` **before** RB2B's script loads:
 
 ```javascript
-// BLACKOUT Protocol - Greyout Mode
-// Intercepts RB2B API calls and sanitizes payload
-
+// From greyout-core.js - simplified
 const KEEP_FIELDS = ['account', 'rb2b_md5', 'li_md5', 'guid', 'session_id'];
-const NUKE_FIELDS = ['url', 'title', 'last_referrer', 'fbp', 'fbc', 'hs_hubspotutk'];
+const NUKE_FIELDS = ['url', 'title', 'referrer', 'fbp', 'fbc', 'hs_hubspotutk'];
 
-self.addEventListener('fetch', event => {
-  const url = new URL(event.request.url);
-
-  // Intercept RB2B API Gateway calls
-  if (url.hostname.includes('execute-api') && url.pathname.includes('b2b')) {
-    event.respondWith(sanitizeAndForward(event.request));
+window.fetch = async function(input, init = {}) {
+  if (isRB2BRequest(url)) {
+    init.body = sanitizeBody(init.body);  // Strip NUKE fields
   }
-});
-
-async function sanitizeAndForward(request) {
-  const body = await request.json();
-
-  // Strip monetizable fields
-  NUKE_FIELDS.forEach(field => delete body[field]);
-
-  // Sanitize geo to country-only
-  if (body.geo) {
-    body.geo = { country: body.geo.country };
-  }
-
-  // Forward sanitized request
-  return fetch(request.url, {
-    method: 'POST',
-    headers: request.headers,
-    body: JSON.stringify(body)
-  });
-}
+  return originalFetch.call(window, input, init);
+};
 ```
+
+### Console Output
+
+When working, you'll see:
+```
+[GREYOUT] GREYOUT MODE ACTIVE
+[GREYOUT] Intercepted fetch to: https://xyz.execute-api.us-west-2.amazonaws.com/b2b
+[GREYOUT] STRIPPED: url → https://example.com/pricing...
+[GREYOUT] STRIPPED: referrer → https://google.com/...
+[GREYOUT] STRIPPED: fbp → fb.1.1234567890...
+[GREYOUT] Sanitized payload: stripped 6 monetizable fields
+```
+
+### Enterprise Deployment Options
+
+1. **Chrome Enterprise Policy**: Deploy via `ExtensionInstallForcelist`
+2. **Network Proxy**: Sanitize at mitmproxy/nginx layer
+3. **GTM Custom Template**: Wrap RB2B in sanitizing JavaScript variable
+
+Full documentation: [`GREYOUT/README.md`](../GREYOUT/README.md)
 
 **Pros**:
 - GTM keeps identification capability
 - Vendor loses monetization data
 - Security team can approve
 - Measurable impact (vendor sees 200 OK but empty intent)
+- **Production-ready Chrome extension included**
 
 **Cons**:
-- Requires deployment/maintenance
-- Cat-and-mouse with vendor updates
-- Some edge cases may need tuning
+- Requires browser extension deployment
+- Cat-and-mouse with vendor updates (BLACKOUT will update signatures)
 
-**Effort**: Moderate (service worker deployment + testing)
+**Effort**: Low-Moderate (extension install + verify)
 
 ---
 

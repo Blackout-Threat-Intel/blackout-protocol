@@ -22,6 +22,17 @@ They take... everything else.
 
 ---
 
+## Two Modes
+
+| Mode | What It Does | Use When |
+|------|--------------|----------|
+| **BLACKOUT** | Blocks all vendor traffic. Synthetic 200 OK returned. | You want to completely remove the vendor |
+| **GREYOUT** | Strips monetizable data, keeps identification. GTM gets leads, vendor gets noise. | You need to keep the vendor but limit data sharing |
+
+**New:** [GREYOUT Mode](./GREYOUT/) - Full Chrome extension for selective field sanitization.
+
+---
+
 ## What It Does
 
 BLACKOUT Protocol intercepts all outbound network requests at the browser level and blocks surveillance trackers from ever reaching their servers. Synthetic `200 OK` responses ensure your site doesn't break.
