@@ -56,19 +56,84 @@ RB2B collects **far more than needed** for identification:
 
 ### Defeat Device Behavior
 
-RB2B scripts contain **50+ bot detection signatures** that disable tracking when compliance tools are detected:
+RB2B scripts contain **50+ bot detection signatures** that disable tracking when compliance tools are detected. This is the actual code from their obfuscated script:
+
+#### The Devil's Regex
 
 ```javascript
-// Detected patterns trigger early exit
-const BOT_SIGNATURES = [
-  "selenium", "puppeteer", "playwright", "cypress",
-  "headlesschrome", "phantomjs", "webdriver",
-  "ahrefssiteaudit", "semrushbot", "hubspot",
-  "beautifulsoup", "scrapy", "postman", "insomnia"
+// Line 217 of deobfuscated reb2b.js - matches ANY audit/compliance tool
+/bot\b|spider|crawler|scraper|fetcher|monitor|checker|validator|analyzer|automated|headless|phantom|selenium|webdriver|puppeteer|playwright/i
+```
+
+**Read that again.** They detect:
+- `monitor` - blocks security monitoring tools
+- `checker` - blocks compliance checkers
+- `validator` - blocks validators
+- `analyzer` - blocks security analyzers
+
+#### The Full Bot Array (45+ signatures)
+
+```javascript
+// "Instant exit" patterns - major crawlers
+const MAJOR_BOTS = [
+  'googlebot', 'bingbot', 'facebookexternal',
+  'twitterbot', 'linkedinbot'
 ];
 
-if (isBot()) return; // Tracking disabled for auditors
+// Full detection list
+const BOT_SIGNATURES = [
+  // Search engines
+  'ahrefsbot', 'ahrefssiteaudit', 'applebot', 'baiduspider',
+  'bingpreview', 'bytespider', 'duckduckbot', 'gptbot',
+  'msnbot', 'petalbot', 'pinterest', 'rogerbot',
+  'semrushbot', 'slurp', 'yandexbot',
+
+  // Google's fleet
+  'adsbot-google', 'apis-google', 'feedfetcher-google',
+  'storebot-google', 'mediapartners-google',
+
+  // Social crawlers
+  'whatsapp', 'telegram', 'discord', 'instagram',
+
+  // SEO/Audit tools
+  'sitebulb', 'deepscan', 'prerender',
+  'turnitin', 'ia_archiver',
+
+  // SMOKING GUN - blocks compliance audits
+  'hubspot',        // <-- BLOCKS HUBSPOT'S OWN AUDIT TOOLS
+  'crawler',
+  'vercelbot',
+
+  // Automation frameworks
+  'headlesschrome', 'cypress', 'phantomjs',
+  'selenium', 'chromedriver', 'webdriver',
+  'geckodriver',
+
+  // HTTP clients
+  'beautifulsoup', 'scrapy', 'python-requests',
+  'httpx', 'postman', 'insomnia'
+];
 ```
+
+#### Browser Fingerprint Checks
+
+```javascript
+// Additional detection - returns true if ANY condition met
+if (
+  navigator.webdriver === true ||  // Selenium/Puppeteer flag
+  screen.width === 0 ||            // Headless browser
+  screen.height === 0 ||           // Headless browser
+  window.callPhantom ||            // PhantomJS
+  window._phantom ||               // PhantomJS
+  window.phantom                   // PhantomJS
+) {
+  return; // Tracking disabled
+}
+```
+
+#### Why This Matters
+
+When your security team runs an audit with Puppeteer, Selenium, or any tool containing "analyzer", "monitor", "checker", or "validator" in its user agent—**the script disables itself**. Your audit shows clean. Real users get full surveillance.
 
 **This is a defeat device**: the script behaves differently during compliance testing than in production—identical to Volkswagen's emissions scandal strategy.
 
