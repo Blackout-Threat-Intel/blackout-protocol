@@ -60,6 +60,7 @@ Log every blocked request. Build evidence. Know what you're stopping.
 
 ## Documentation
 
+- **[REMEDIATION-PLAYBOOK.md](./REMEDIATION-PLAYBOOK.md)** - Full IOCs, Keep vs Nuke fields, implementation guide
 - **[threat-model.md](./threat-model.md)** - What vendors extract and why it matters
 - **[architecture.md](./architecture.md)** - How network interception works
 
