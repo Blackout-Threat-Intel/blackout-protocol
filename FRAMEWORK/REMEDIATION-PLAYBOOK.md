@@ -20,6 +20,20 @@ RB2B (operated by Retention.com) deploys visitor deanonymization technology that
 
 ---
 
+## VERIFY THESE CLAIMS YOURSELF
+
+We encourage independent verification. If we're wrong, file an issue.
+
+1. **Install RB2B** on a test page
+2. **Open DevTools** → Network tab
+3. **Filter by** `execute-api` or `cloudfront.net/b/`
+4. **Observe the payload fields** in the POST request body
+5. **Compare to our Keep vs Nuke list** below
+
+You'll see fields like `url`, `referrer`, `fbp`, `hs_hubspotutk` being exfiltrated—none of which are required for visitor identification.
+
+---
+
 ## THREAT OVERVIEW
 
 ### What RB2B Does
