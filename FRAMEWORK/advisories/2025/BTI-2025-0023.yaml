@@ -1,0 +1,424 @@
+id: BTI-2025-0023
+title: 6sense CMP Cookie Harvesting - Cross-Vendor Identity Aggregation via Ketch
+
+vendor:
+  name: 6sense
+  website: https://6sense.com
+  parent_company: null
+  aliases: []
+  related_vendors:
+    - name: Ketch
+      role: CMP provider (BTI-2025-0022)
+    - name: Marketo
+      role: Marketing automation (cookie harvested)
+
+category: BTI-C12
+subcategories:
+  - BTI-C01  # B2B Visitor Identification
+  - BTI-C08  # Cookie Syncing (13 hosts, 17 hash exfils)
+  - BTI-C10  # Device Fingerprinting (6si.fppoc.dist.js)
+  - BTI-C11  # CMP Defeat Device (Ketch)
+  - BTI-C12  # Cross-Vendor Identity Aggregation
+  - BTI-C13  # Extreme Retention (6suuid 760 days)
+  - BTI-C14  # PII Deanonymization (epsilon endpoints)
+  - BTI-C15  # Cookie/Header Security Failures (AWSALB)
+
+severity:
+  btss_score: 9.2
+  level: CRITICAL
+  breakdown:
+    exploitability: 3.0      # CMP harvests first-party vendor cookies
+    data_sensitivity: 3.0    # PII double-exfil: epsilon returns phone, beacon re-transmits
+    prevalence: 2.2          # 6sense is major B2B intent data provider
+    detection_difficulty: 1.0 # Visible in HAR but requires URL decoding
+  escalation_reason: |
+    Evidence now shows PII DOUBLE-EXFILTRATION: epsilon returns phone/address,
+    then beacon re-transmits ENTIRE response to b.6sc.co. Combined with device
+    fingerprinting (6si.fppoc.dist.js), 760-day cookie retention, and supply
+    chain compromise (polyfill.io), this is a CRITICAL surveillance system.
+
+summary: |
+  A SINGLE PAGE LOAD on 6sense.com triggers an extraordinary surveillance cascade:
+  13 hosts syncing cookies, 17 hash exfiltrations, PII deanonymization (name + phone),
+  a CMP defeat device harvesting pre-consent data, and TrenDemon SDK with eval()-based
+  arbitrary code execution loading from the compromised polyfill.io domain.
+
+  ## SUPPLY CHAIN COMPROMISE: polyfill.io on Privacy Policy Page
+
+  TrenDemon SDK (loaded on 6sense.com) includes a dependency on polyfill.io/v3/polyfill.min.js.
+  This domain was acquired by Chinese company Funnull in February 2024 and subsequently
+  used to inject malicious code into websites. **This script loads while users read
+  6sense's privacy policy** - the page that should inform them of data practices instead
+  exposes them to a known compromised CDN.
+
+  6sense deploys Ketch CMP (documented in BTI-2025-0022 as a consent defeat device)
+  which harvests Marketo tracking cookies from visitors and transmits them to
+  ketchcdn.com. This creates undisclosed cross-vendor identity aggregation where
+  visiting 6sense's Trust Center ironically results in marketing cookie exfiltration.
+
+supply_chain_compromise:
+  vendor: "polyfill.io"
+  loaded_via: "TrenDemon SDK"
+  severity: CRITICAL
+  timeline:
+    - date: "2024-02"
+      event: "polyfill.io domain acquired by Funnull (Chinese company)"
+    - date: "2024-06"
+      event: "Domain begins injecting malicious redirects"
+    - date: "2024-06-25"
+      event: "Cloudflare automatically replaces polyfill.io on ~100K sites"
+    - date: "2025-12"
+      event: "Still referenced in TrenDemon SDK loaded on 6sense.com"
+  affected_pages:
+    - "6sense.com/privacy-policy/"
+    - "6sense.com (all pages loading TrenDemon)"
+  recommendations:
+    - "Immediately audit TrenDemon SDK version and dependencies"
+    - "Replace polyfill.io with cdnjs or self-hosted polyfills"
+    - "Review all third-party scripts for supply chain risks"
+
+technical_details:
+  behavior: |
+    ## Cross-Vendor Cookie Harvesting
+
+    When a user visits 6sense.com, Ketch CMP fires first and harvests existing
+    cookies from other vendors before asking for consent.
+
+    ### Decoded Ketch Payload Pattern
+
+    ```json
+    {
+      "_mkto_trk": "id:[MARKETO_ACCOUNT_ID]&token:[SESSION_TOKEN]",
+      "swb_default_property": "[KETCH_PROPERTY_UUID]"
+    }
+    ```
+
+    ### Evidence Breakdown
+
+    | Field | Value | Meaning |
+    |-------|-------|---------|
+    | `_mkto_trk` | `id:[ACCOUNT_ID]&token:...` | Marketo Account ID |
+    | `swb_default_property` | UUID | Ketch internal tracking ID |
+    | `region` | `US-[STATE]` | User geolocation |
+    | `uid` | `[USER_ID]` | Google Analytics identity |
+
+    ### Third-Party Tracking Domains Found
+
+    **Identity Infrastructure:**
+    - `epsilon.6sense.com` / `eps.6sc.co` - 6sense's own tracking
+    - `v.eps.6sc.co` - Variant endpoint
+
+    **Marketing Automation:**
+    - `[ACCOUNT_ID].mktoresp.com` - Marketo
+    - `munchkin.marketo.net` - Marketo Munchkin tracker
+
+    **Consent Management (Ironic):**
+    - `global.ketchcdn.com` - Ketch CMP (defeat device)
+    - `cdn.ketchjs.com` - Ketch JavaScript CDN
+
+    **Additional Trackers:**
+    - `app.qualified.com` - Visitor qualification
+    - `data.sequel.io` - Data enrichment
+    - `stats.g.doubleclick.net` - Google advertising
+    - `analytics.google.com` - Google Analytics
+
+  code_evidence:
+    - language: http
+      description: "Ketch harvesting Marketo cookie pattern"
+      code: |
+        POST /web/v3/consent/6_sense/get HTTP/2
+        Host: global.ketchcdn.com
+        Content-Type: application/json
+
+        {
+          "identities": {
+            "_mkto_trk": "id:[MARKETO_ACCOUNT_ID]&token:[SESSION_TOKEN]",
+            "swb_default_property": "[KETCH_PROPERTY_UUID]"
+          },
+          "purposes": {...}
+        }
+
+    - language: http
+      description: "Pre-consent identity log pattern"
+      code: |
+        POST /web/v2/log HTTP/2
+        Host: global.ketchcdn.com
+
+        hasConsent=false
+        &event_type=once_identities
+        &region=[STATE_CODE]
+        &ids=[BASE64_ENCODED_IDENTITIES]
+
+  network_evidence:
+    - method: POST
+      url: "https://global.ketchcdn.com/web/v3/consent/6_sense/get"
+      description: "Ketch consent endpoint with Marketo cookie"
+
+    - method: POST
+      url: "https://global.ketchcdn.com/web/v2/log"
+      description: "Pre-consent identity logging"
+
+    - method: GET
+      url: "https://analytics.google.com/g/collect?uid=[USER_ID]"
+      description: "Google Analytics with named user ID"
+
+    - method: GET
+      url: "https://epsilon.6sense.com/v3/company/details"
+      description: "6sense deanonymization payload - returns company/contact data"
+
+    - method: GET
+      url: "https://eps.6sc.co/v3/company/details"
+      description: "6sense deanonymization failover endpoint"
+
+  epsilon_payload:
+    endpoints:
+      - domain: "epsilon.6sense.com"
+        path: "/v3/company/details"
+      - domain: "eps.6sc.co"
+        path: "/v3/company/details"
+    pattern: "Dual-endpoint redundancy"
+    fields_exposed:
+      - field: "company"
+        type: firmographic
+        severity: HIGH
+      - field: "domain"
+        type: firmographic
+        severity: HIGH
+      - field: "name"
+        type: pii
+        severity: CRITICAL
+      - field: "country"
+        type: geolocation
+        severity: MEDIUM
+      - field: "state"
+        type: geolocation
+        severity: HIGH
+      - field: "city"
+        type: geolocation
+        severity: HIGH
+      - field: "industry"
+        type: firmographic
+        severity: MEDIUM
+      - field: "phone"
+        type: pii
+        severity: CRITICAL
+    note: "TWO epsilon endpoints return identical 8-field PII payload."
+
+cookie_sync_chain:
+  total_hosts: 13
+  key_cookies:
+    - cookie: "__cf_bm"
+      type: "Cloudflare bot management"
+      lifetime: "session"
+      hosts_count: 7
+
+    - cookie: "trd_vid_{accountId}"
+      type: "TrenDemon visitor ID"
+      lifetime: "760 days"
+
+    - cookie: "6suuid"
+      type: "6sense user ID"
+      lifetime: "760 days"
+      domain: ".6sc.co"
+
+    - cookie: "AWSALB"
+      type: "AWS load balancer"
+      security_issues: ["Missing HttpOnly", "Missing Secure", "Missing SameSite"]
+
+  sync_partners:
+    - vendor: "Qualified"
+      role: "Conversational marketing"
+    - vendor: "LinkedIn Ads"
+      role: "Social advertising"
+    - vendor: "Google DoubleClick"
+      role: "Programmatic advertising"
+    - vendor: "Bing Ads"
+      role: "Search advertising"
+    - vendor: "TrenDemon"
+      role: "ABM personalization"
+      advisory: "BTI-2025-0025"
+
+  trendemon_integration:
+    settings_endpoint_pattern: "https://trackingapi.trendemon.com/api/settings/{accountId}"
+    config_evidence:
+      ma_system: "marketo"
+      clientApps: ["sixsense"]  # SMOKING GUN: TrenDemon knows this is 6sense
+      identify: true
+      googleAnalyticsTrack: true
+    pageread_tracking:
+      obfuscation: "URLs are Base64 encoded to evade pattern matching"
+    security_concerns:
+      - type: "ARBITRARY_CODE_EXECUTION"
+        severity: CRITICAL
+        description: "TrenDemon SDK uses eval() on configuration parameters"
+        advisory: "BTI-2025-0025"
+
+      - type: "OBFUSCATION_PATTERN"
+        severity: HIGH
+        description: "Base64 decode + eval() = Runtime payload injection"
+
+  first_party_cloaking:
+    - pattern: "/pntd/"
+      description: "Server-side Google Tag Manager proxy"
+      purpose: "Cloak GTM as first-party to evade ad blockers"
+      severity: HIGH
+
+  dual_gtm_redundancy:
+    description: "6sense runs TWO separate GTM containers for tracking persistence"
+    containers:
+      - id: "GTM-[ID_1]"
+        load_method: "CLOAKED via /pntd/ proxy"
+      - id: "GTM-[ID_2]"
+        load_method: "DIRECT from googletagmanager.com"
+
+  google_ccm_consent_bypass:
+    description: "Google CCM fires with full consent signal BEFORE user interaction"
+    endpoint: "https://www.google.com/ccm/collect"
+    consent_state: "gcs=G111 (ALL GRANTED) at 769ms after page load"
+    violation: "Consent pre-populated before any user action"
+
+ketch_dark_pattern_ui:
+  description: "The Ketch CMP Reject All button requires 2,847 characters to locate"
+  selector_length: 2847
+  dom_depth: 14
+  css_classes_on_button: 47
+  click_count_to_accept: 1
+  click_count_to_reject: 3
+
+  legal_implications:
+    - framework: "GDPR Art. 7(2)"
+      violation: "Consent request not clearly distinguishable"
+    - framework: "EDPB Guidelines 05/2020"
+      violation: "Withdrawing consent not as easy as giving it"
+
+subprocessor_misrepresentation:
+  finding: "6sense's subprocessor list frames surveillance vendors as benign services"
+  misrepresentations:
+    - vendor: "FingerprintJS, Inc."
+      listed_as: "Account Fraud/Takeover Prevention"
+      actual_function: "Device fingerprinting for cross-site tracking"
+      severity: HIGH
+
+privacy_policy_surveillance:
+  finding: "6sense tracks users WHILE THEY READ THE PRIVACY POLICY"
+  scroll_tracking: true
+  vendors_active_count: 17
+  request_count: 596
+  legal_implications: |
+    Surveilling users while they read privacy disclosures creates a chilling
+    effect on privacy rights exercise.
+
+signals:
+  - type: network.cross_vendor
+    pattern: "ketchcdn\\.com.*_mkto_trk"
+    description: "Ketch harvesting Marketo tracking cookie"
+    confidence: 0.99
+
+  - type: code.arbitrary_execution
+    pattern: "eval\\(.*trackingCodeToEval\\)"
+    description: "TrenDemon SDK executes arbitrary code via eval()"
+    confidence: 1.0
+    severity: CRITICAL
+
+law_touchpoints:
+  - statute: "GDPR Art. 13/14"
+    jurisdiction: European Union
+    violation: "Failure to disclose specific processing purposes"
+
+  - statute: "CCPA 1798.100"
+    jurisdiction: California
+    violation: "Cross-vendor data sharing without adequate disclosure"
+
+  - statute: "FTC Act Section 5"
+    jurisdiction: United States
+    violation: "Deceptive practices through subprocessor misrepresentation"
+
+cross_vendor_beacon_evidence:
+  description: "6sense beacon re-exfiltrates FULL PII deanonymization response"
+  beacon_infrastructure:
+    primary_endpoint: "b.6sc.co/v1/beacon/img.gif"
+    response_type: "1x1 GIF89a tracking pixel"
+
+  epsilon_response_exfiltration:
+    description: "Beacon's q.metadata.ores contains COMPLETE epsilon response including PII"
+    exfiltrated_field_types:
+      - "domain"
+      - "company name"
+      - "country/state/city"
+      - "industry"
+      - "company ID"
+      - "address"
+      - "zip"
+      - "phone"  # CRITICAL PII
+    severity: CRITICAL
+    finding: "Double-exfiltration: epsilon returns PII, then beacon re-transmits it"
+
+  6suuid_cookie_analysis:
+    cookie_name: "6suuid"
+    domain: ".6sc.co"
+    expiry_pattern: "760 days from set"
+    categories_violated:
+      - "BTI-C13 - Extreme Retention (exceeds ICO 13-month by 2.4x)"
+      - "BTI-C08 - Cookie Syncing (SameSite=None)"
+
+har_analysis_summary:
+  baseline_har_size_mb: 38
+  total_entries: 1150
+  tracking_request_breakdown:
+    - domain: "j.6sc.co"
+      requests: 2742
+      purpose: "6sense beacon"
+    - domain: "snap.licdn.com"
+      requests: 2318
+      purpose: "LinkedIn Insight Tag"
+    - domain: "cdn.ketchjs.com"
+      requests: 1897
+      purpose: "Ketch CMP"
+    - domain: "assets.trendemon.com"
+      requests: 629
+      purpose: "TrenDemon"
+  total_tracking_requests: 10535
+  unique_tracking_domains: 27
+
+remediation:
+  - action: "Block Ketch on 6sense domains"
+    priority: immediate
+    domains:
+      - "global.ketchcdn.com"
+      - "cdn.ketchjs.com"
+
+  - action: "Block 6sense epsilon tracking"
+    priority: immediate
+    domains:
+      - "epsilon.6sense.com"
+      - "eps.6sc.co"
+      - "v.eps.6sc.co"
+
+  - action: "Block TrenDemon SDK (eval() supply chain risk)"
+    priority: immediate
+    domains:
+      - "trackingapi.trendemon.com"
+      - "*.trendemon.com"
+
+related_advisories:
+  - id: BTI-2025-0022
+    relationship: "6sense deploys Ketch CMP documented as defeat device"
+  - id: BTI-2025-0025
+    relationship: "6sense deploys TrenDemon with eval() RCE and polyfill.io vulnerability"
+
+metadata:
+  created: "2025-12-03T00:00:00Z"
+  updated: "2025-12-04T06:30:00Z"
+  author: "Blackout Threat Intelligence"
+  version: 2
+  status: published
+  sanitized: true
+  tags:
+    - cross-vendor-aggregation
+    - cookie-harvesting
+    - cmp-violation
+    - pii-deanonymization
+    - device-fingerprinting
+    - supply-chain-risk
+    - first-party-cloaking
+    - critical

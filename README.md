@@ -24,11 +24,51 @@ This repository contains **technical findings, IOCs, and remediation playbooks**
 | Directory | Contents |
 |-----------|----------|
 | **[FRAMEWORK/](./FRAMEWORK/)** | Threat models, architecture analysis, remediation playbooks |
+| **[FRAMEWORK/advisories/](./FRAMEWORK/advisories/)** | BTI advisory records (YAML format) |
 | **[KITS/](./KITS/)** | Deployment guides and implementation references |
 
 ---
 
-## Latest: RB2B Threat Playbook
+## Active Threats
+
+| Vendor | BTI ID | Severity | Status |
+|--------|--------|----------|--------|
+| **6sense / TrenDemon** | BTI-2025-0025 | CRITICAL | [Playbook](./FRAMEWORK/REMEDIATION-PLAYBOOK-TRENDEMON.md) |
+| RB2B (Retention.com) | BTI-2025-0001 | CRITICAL | [Playbook](./FRAMEWORK/REMEDIATION-PLAYBOOK.md) |
+
+---
+
+## NEW: 6sense/TrenDemon Zero-Day Disclosure (2025-12-04)
+
+**[FRAMEWORK/REMEDIATION-PLAYBOOK-TRENDEMON.md](./FRAMEWORK/REMEDIATION-PLAYBOOK-TRENDEMON.md)**
+
+**Five zero-day vulnerabilities** discovered in the 6sense/TrenDemon ABM stack:
+
+| Codename | Vulnerability | CVSS | Impact |
+|----------|---------------|------|--------|
+| **DemonScript** | eval() arbitrary code execution | 9.8 | Any TrenDemon customer can execute JS on your visitors |
+| **PollyWannaCrack** | polyfill.io supply chain | 10.0 | Chinese malware loaded on older browsers |
+| **ZeroSense** | Cross-customer PII cache | 9.1 | Phone/address cached 760 days across ALL 6sense customers |
+| **RollCredits** | Video completion RCE | 9.8 | Wistia/Brightcove videos trigger eval() |
+| **MaCook'd** | Marketo cookie theft | 7.5 | _mkto_trk Base64'd and exfiltrated |
+
+### Verify It Yourself
+
+```bash
+# Check TrenDemon SDK for eval() vectors
+curl -s "https://assets.trendemon.com/tag/trends.min.js" | grep -o "eval(" | wc -l
+# Should return: 6
+
+# Check for polyfill.io reference
+curl -s "https://assets.trendemon.com/tag/trends.min.js" | grep -o "polyfill.io" | wc -l
+# Should return: 1+
+```
+
+[Read the full playbook →](./FRAMEWORK/REMEDIATION-PLAYBOOK-TRENDEMON.md)
+
+---
+
+## RB2B Threat Playbook
 
 **[FRAMEWORK/REMEDIATION-PLAYBOOK.md](./FRAMEWORK/REMEDIATION-PLAYBOOK.md)**
 

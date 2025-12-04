@@ -1,0 +1,365 @@
+id: BTI-2025-0025
+title: "TrenDemon ABM Platform - eval() RCE, polyfill.io Supply Chain & Cross-Vendor Cookie Harvesting"
+
+vendor:
+  name: TrenDemon
+  website: https://trendemon.com
+  parent_company: null
+  aliases: []
+
+category: BTI-C09
+subcategories:
+  - BTI-C09  # Arbitrary Code Execution (eval())
+  - BTI-C10  # Supply Chain Vulnerability (polyfill.io)
+  - BTI-C12  # Cross-Vendor Identity Aggregation
+  - BTI-C13  # Extreme Retention
+
+severity:
+  btss_score: 9.5
+  level: CRITICAL
+  breakdown:
+    exploitability: 3.5      # eval() enables arbitrary code execution
+    data_sensitivity: 2.5    # 760-day cookies, MA cookie harvesting
+    prevalence: 2.0          # Deployed on major ABM platforms (6sense)
+    detection_difficulty: 1.5 # Base64 URL obfuscation, polyfill.io hidden
+
+summary: |
+  TrenDemon is an ABM (Account-Based Marketing) content personalization platform.
+  Critical findings include: (1) 6 eval() functions executing arbitrary JavaScript
+  from CTA parameters enabling customer-level RCE, (2) polyfill.io supply chain
+  vulnerability loading from COMPROMISED domain (June 2024), (3) 760-day cookie
+  retention violating GDPR/ICO guidelines, (4) Cross-vendor Marketo cookie harvesting,
+  (5) Base64 URL obfuscation to evade privacy tools.
+
+technical_details:
+  behavior: |
+    ## eval() Arbitrary Code Execution
+
+    The trends.min.js SDK contains a critical vulnerability in $Trd_Utils.sendGa4Tracking:
+
+    ```javascript
+    $Trd_Utils.sendGa4Tracking = function(ctaParams, event, page) {
+      var trackingCodeToEval;
+      switch(event) {
+        case "load":
+          trackingCodeToEval = ctaParams.CustomImpressionTrackingCode;
+          break;
+        case "click":
+          trackingCodeToEval = ctaParams.CustomClickTrackingCode;
+          break;
+      }
+      return (null == trackingCodeToEval ? void 0 : trackingCodeToEval.length)
+        ? eval(trackingCodeToEval)  // <-- ARBITRARY CODE EXECUTION
+        : dataLayer.push(...)
+    }
+    ```
+
+    Any TrenDemon customer (or attacker compromising CTA configuration) can execute
+    arbitrary JavaScript in visitor browsers.
+
+    ## Marketo Cookie Harvesting
+
+    TrenDemon reads Marketo _mkto_trk cookie, Base64-encodes it, stores as
+    trd_ma_cookie, and transmits to trackingapi.trendemon.com/api/experience/personal.
+
+    Evidence pattern:
+    ```json
+    {
+      "name": "trd_ma_cookie",
+      "value": "[BASE64_ENCODED_MARKETO_TOKEN]"
+    }
+    ```
+
+    Decoded format: `id:[MARKETO_ACCOUNT_ID]&token:_mch-[DOMAIN]-[SESSION_TOKEN]`
+
+  cookie_analysis:
+    long_lived:
+      - cookie: "trd_vid_{accountId}"
+        domain: "trackingapi.trendemon.com"
+        lifetime: "760 days"
+        severity: HIGH
+
+      - cookie: "trd_gavid_{accountId}"
+        domain: "trackingapi.trendemon.com"
+        lifetime: "760 days"
+        severity: HIGH
+
+      - cookie: "trd_gvid"
+        domain: "trackingapi.trendemon.com"
+        lifetime: "760 days"
+        severity: HIGH
+
+      - cookie: "trd_ma_cookie"
+        domain: ".{customer_domain}"
+        purpose: "Harvested Marketo cookie (Base64 encoded)"
+        severity: HIGH
+
+    local_storage:
+      - name: "trd_vid_l"
+        purpose: "Persistent visitor ID backup"
+        lifetime: "Infinite"
+      - name: "trd_vuid_l"
+        purpose: "Persistent visitor UID backup"
+        lifetime: "Infinite"
+
+  code_evidence:
+    - language: javascript
+      description: "eval() arbitrary code execution in trends.min.js"
+      code: |
+        $Trd_Utils.sendGa4Tracking = function(ctaParams, event, page) {
+          var trackingCodeToEval;
+          switch(event) {
+            case "load": trackingCodeToEval = ctaParams.CustomImpressionTrackingCode;
+            case "click": trackingCodeToEval = ctaParams.CustomClickTrackingCode;
+          }
+          return (trackingCodeToEval?.length) ? eval(trackingCodeToEval) : ...
+        }
+      source_file: "https://assets.trendemon.com/tag/trends.min.js"
+
+    - language: http
+      description: "Marketo cookie exfiltration pattern"
+      code: |
+        GET /api/experience/personal?
+          AccountId=[ACCOUNT_ID]&
+          ClientUrl=[PAGE_URL]&
+          MarketingAutomationCookie=id:[MARKETO_ID]&token:[TOKEN]&
+          vid=[VISITOR_ID]
+        Host: trackingapi.trendemon.com
+      source_file: "HAR evidence"
+
+    - language: javascript
+      description: "polyfill.io supply chain vulnerability"
+      code: |
+        t.prototype.loadPollyills = function (t) {  // Note: MISSPELLED
+          if (Array.prototype.findIndex) t();  // Modern browser - skip
+          else {
+            var e = document.createElement("script");
+            e.src = "https://polyfill.io/v3/polyfill.min.js?features=...";
+            // LOADS FROM COMPROMISED DOMAIN ON OLDER BROWSERS (IE11, Safari <9)
+          }
+        };
+      source_file: "https://assets.trendemon.com/tag/trends.min.js"
+
+  supply_chain_vulnerability:
+    polyfill_io:
+      status: CRITICAL
+      compromised_date: "2024-06-25"
+      acquired_by: "Funnull CDN (Chinese)"
+      impact: "100,000+ websites compromised"
+      trigger_condition: "Fires when Array.prototype.findIndex unavailable (IE11, Safari < 9, older mobile)"
+      trendemon_status: "Production code STILL references compromised domain"
+      note: "polyfill.io was acquired and began injecting malicious redirects/code. TrenDemon has not patched."
+
+  network_evidence:
+    - method: GET
+      url: "https://trackingapi.trendemon.com/api/settings/{accountId}"
+      description: "Configuration fetch"
+
+    - method: GET
+      url: "https://trackingapi.trendemon.com/api/events/pageview"
+      description: "Page view tracking with Base64-encoded URL"
+
+    - method: GET
+      url: "https://trackingapi.trendemon.com/api/events/pageread"
+      description: "Content read tracking"
+
+    - method: GET
+      url: "https://trackingapi.trendemon.com/api/experience/personal"
+      description: "Personalization + Marketo cookie exfiltration"
+
+    - method: GET
+      url: "https://trackingapi.trendemon.com/api/experience/ace-campaign"
+      description: "Campaign targeting"
+
+infrastructure:
+  domains:
+    - domain: "trackingapi.trendemon.com"
+      purpose: "Primary API endpoint"
+      risk: HIGH
+
+    - domain: "assets.trendemon.com"
+      purpose: "Script delivery (trends.min.js)"
+      risk: HIGH
+
+  scripts:
+    - url: "https://assets.trendemon.com/tag/trends.min.js"
+      signatures:
+        - "$Trd_Utils"
+        - "$Trd_Tools"
+        - "sendGa4Tracking"
+        - "CustomImpressionTrackingCode"
+        - "CustomClickTrackingCode"
+        - "trendemon"
+
+# Account config structure (pattern, not actual values)
+account_config_pattern:
+  accountId: "[NUMERIC_ID]"
+  ma_system: "marketo|hubspot|pardot|acton|salesforce"
+  clientApps: "[CUSTOMER_APPS]"
+  identify: true
+  contentFetchDomain: "[CUSTOMER_LIBRARY_DOMAIN]"
+  isActive: true
+  aceSupport: true
+  ctaCount: "[NUM_CTAS]"
+  googleAnalyticsTrack: true
+
+identity_chain:
+  description: |
+    TrenDemon visitor ID links through Marketo to 6sense to Epsilon,
+    enabling full deanonymization chain.
+  chain:
+    - stage: 1
+      identifier: "TrenDemon visitor ID"
+      value: "[VISITOR_ID]"
+    - stage: 2
+      identifier: "Marketo ID"
+      value: "[MARKETO_ACCOUNT_ID]"
+    - stage: 3
+      identifier: "6sense UUID"
+      value: "[6SENSE_UUID]"
+    - stage: 4
+      identifier: "Epsilon Company ID"
+      value: "[EPSILON_COMPANY_ID]"
+    - stage: 5
+      identifier: "Deanonymized Entity"
+      value: "[BUSINESS_ENTITY]"
+
+base64_obfuscation:
+  finding: |
+    TrenDemon Base64-encodes tracked page URLs to evade content blockers
+    and privacy tools.
+  examples:
+    - pattern: "aHR0cHM6Ly... (Base64 encoded URL)"
+      note: "URLs are Base64 encoded to evade pattern matching"
+
+ironic_tracking:
+  finding: "TrenDemon actively tracks visits to privacy-related pages"
+  pages_tracked:
+    - "/privacy-policy/"
+    - "/privacy-center/"
+    - "/trust/"
+
+supported_ma_systems:
+  - marketo
+  - hubspot
+  - pardot
+  - acton
+  - salesforce
+
+signals:
+  - type: code.eval
+    pattern: "eval\\(trackingCodeToEval\\)"
+    description: "Arbitrary code execution via eval()"
+    confidence: 0.99
+
+  - type: cookie.extreme_lifetime
+    pattern: "trd_vid.*760"
+    description: "760-day tracking cookie"
+    confidence: 0.99
+
+  - type: cross_vendor.cookie_harvesting
+    pattern: "MarketingAutomationCookie"
+    description: "Marketo cookie exfiltration"
+    confidence: 0.99
+
+  - type: obfuscation.base64_url
+    pattern: "url=aH[A-Za-z0-9+/]+"
+    description: "Base64-encoded URL tracking"
+    confidence: 0.95
+
+  - type: supply_chain.compromised_domain
+    pattern: "polyfill\\.io/v3/polyfill"
+    description: "polyfill.io supply chain - domain compromised June 2024"
+    confidence: 0.99
+
+  - type: code.typo_indicator
+    pattern: "loadPollyills"
+    description: "Misspelled function name (loadPollyills vs loadPolyfills)"
+    confidence: 0.99
+
+law_touchpoints:
+  - statute: "GDPR Art. 5(1)(e)"
+    jurisdiction: European Union
+    violation: "Storage limitation - 760-day cookie retention"
+
+  - statute: "GDPR Art. 6"
+    jurisdiction: European Union
+    violation: "No valid legal basis for cross-vendor cookie sharing"
+
+  - statute: "CCPA 1798.140"
+    jurisdiction: California
+    violation: "Cross-vendor data sharing may constitute 'sale' of PI"
+
+  - statute: "ePrivacy Directive Art. 5(3)"
+    jurisdiction: European Union
+    violation: "Cookie consent required before setting tracking cookies"
+
+cvss_estimate:
+  eval_vulnerability: 9.8
+  rationale: |
+    Network/Low/None/Changed/High/High/High - Any TrenDemon customer
+    can execute arbitrary JavaScript in visitor browsers via CTA configuration.
+
+remediation:
+  for_website_owners:
+    - action: "Remove TrenDemon scripts from site"
+      priority: immediate
+    - action: "Block trackingapi.trendemon.com at firewall/CDN"
+      priority: immediate
+    - action: "Audit Marketo integration for cookie leakage"
+      priority: short_term
+
+  for_visitors:
+    - action: "Block trendemon.com domains in browser/network"
+      priority: immediate
+    - action: "Clear trd_* cookies and localStorage"
+      priority: immediate
+
+blocklist:
+  domains:
+    - "trackingapi.trendemon.com"
+    - "assets.trendemon.com"
+    - "trendemon.com"
+
+  cookie_patterns:
+    - "trd_*"
+
+  script_signatures:
+    - "trends.min.js"
+    - "$Trd_Utils"
+    - "$Trd_Tools"
+    - "trendemon"
+
+related_advisories:
+  - id: BTI-2025-0023
+    relationship: "Parent investigation (6sense surveillance stack)"
+
+references:
+  - title: "TrenDemon Website"
+    url: https://trendemon.com
+    type: vendor
+
+  - title: "TrenDemon SDK"
+    url: https://assets.trendemon.com/tag/trends.min.js
+    type: script
+
+  - title: "TrenDemon Settings API Pattern"
+    url: https://trackingapi.trendemon.com/api/settings/{accountId}
+    type: api
+
+metadata:
+  created: "2025-12-04T00:00:00Z"
+  updated: "2025-12-04T00:00:00Z"
+  author: "Blackout Threat Intelligence"
+  version: 1
+  status: active
+  sanitized: true
+  tags:
+    - eval-vulnerability
+    - arbitrary-code-execution
+    - cross-vendor-cookie-harvesting
+    - extreme-cookie-lifetime
+    - base64-obfuscation
+    - marketo-integration
+    - abm-platform
+    - critical
