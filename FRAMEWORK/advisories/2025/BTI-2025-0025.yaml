@@ -107,7 +107,7 @@ technical_details:
     The worker executes canvas-based tests to fingerprint the browser's text and emoji rendering engine, which is highly specific to the user's OS, browser version, and hardware. The results are sent back to the main script via `postMessage()` and combined into a final fingerprint hash.
 
     Key fingerprinting techniques observed:
-    - **Unicode Rendering Probes:** Tests how the browser renders complex emojis and flags (e.g., `🏳️‍⚧️`) by comparing Zero-Width Joiner (ZWJ) vs. Zero-Width Space (ZWSP) renderings.
+    - **Unicode Rendering Probes:** Tests how the browser renders complex emojis and flags (e.g., transgender flag) by comparing Zero-Width Joiner (ZWJ, U+200D) vs. Zero-Width Space (ZWSP, U+200B) renderings.
     - **Canvas Pixel Reading:** Extracts pixel data from a canvas element to create a hash based on the rendering output.
     - **OffscreenCanvas in Worker:** Utilizes `OffscreenCanvas` for performance and to hide the fingerprinting activity from the main browser thread.
 
@@ -251,17 +251,27 @@ technical_details:
               switch (testName) {
                 case "flag":
                   // Sophisticated Unicode rendering test (ZWJ vs ZWSP).
-                  return pixelComparer(ctx, "🏳️‍⚧️", "🏳️​⚧️") ? false
-                    : !pixelComparer(ctx, "🇨🇶", "🇨​🇶") && !pixelComparer(ctx, "🏴󠁧󠁢󠁥󠁮󠁧󠁿", "🏴​󠁧​󠁢​󠁥​󠁮​󠁧​󠁿");
+                  // Compares: "\ud83c\udff3\ufe0f\u200d\u26a7\ufe0f" (with ZWJ)
+                  //      vs:  "\ud83c\udff3\ufe0f\u200b\u26a7\ufe0f" (with ZWSP)
+                  return pixelComparer(ctx, TRANS_FLAG_ZWJ, TRANS_FLAG_ZWSP) ? false
+                    : !pixelComparer(ctx, FLAG_CQ_ZWJ, FLAG_CQ_ZWSP)
+                      && !pixelComparer(ctx, FLAG_ENG_ZWJ, FLAG_ENG_ZWSP);
                 case "emoji":
-                  // Checks if a new emoji ("window") renders anything.
-                  return !pixelChecker(ctx, "🪟");
+                  // Checks if window emoji (\ud83e\udedf) renders anything.
+                  return !pixelChecker(ctx, WINDOW_EMOJI);
               }
               return false;
             },
             /* ... pixel comparison and checking utility functions ... */
           )
         );
+
+        // Unicode constants (escaped for display):
+        // TRANS_FLAG_ZWJ:  \ud83c\udff3\ufe0f\u200d\u26a7\ufe0f (transgender flag with ZWJ)
+        // TRANS_FLAG_ZWSP: \ud83c\udff3\ufe0f\u200b\u26a7\ufe0f (same but ZWSP instead)
+        // FLAG_CQ_ZWJ:     \ud83c\udde8\ud83c\uddf6 (regional flag)
+        // FLAG_ENG_ZWJ:    \ud83c\udff4\udb40\udc67\udb40\udc62\udb40\udc65\udb40\udc6e\udb40\udc67\udb40\udc7f (England)
+        // WINDOW_EMOJI:    \ud83e\udedf
       source_file: "blob:https://trendemon.com/38876f46-47a4-4b3e-8c56-3242d7923cc2"
 
     - language: javascript
