@@ -1,0 +1,721 @@
+id: BTI-2025-0025
+title: "TrenDemon ABM Platform - Arbitrary Code Execution (eval()), Supply Chain & Cookie Harvesting"
+
+vendor:
+  name: TrenDemon
+  website: https://trendemon.com
+  parent_company: null
+  aliases: []
+
+category: BTI-C09
+subcategories:
+  - BTI-C09  # Arbitrary Code Execution (eval())
+  - BTI-C10  # Supply Chain Vulnerability (polyfill.io)
+  - BTI-C12  # Cross-Vendor Identity Aggregation
+  - BTI-C13  # Extreme Retention
+
+severity:
+  btss_score: 9.5
+  level: CRITICAL
+  breakdown:
+    exploitability: 3.5      # eval() enables arbitrary code execution
+    data_sensitivity: 2.5    # 760-day cookies, MA cookie harvesting
+    prevalence: 2.0          # Deployed on major ABM platforms (6sense)
+    detection_difficulty: 1.5 # Base64 URL obfuscation, polyfill.io hidden
+
+summary: |
+  TrenDemon is an ABM (Account-Based Marketing) content personalization platform.
+  Critical findings include: (1) 6 eval() functions executing arbitrary JavaScript
+  from CTA parameters enabling customer-controlled Arbitrary Code Execution, (2) polyfill.io supply chain
+  vulnerability loading from COMPROMISED domain (June 2024), (3) 760-day cookie
+  retention violating GDPR/ICO guidelines, (4) Cross-vendor Marketo cookie harvesting,
+  (5) Base64 URL obfuscation to evade privacy tools.
+
+technical_details:
+  behavior: |
+    ## eval() Arbitrary Code Execution
+
+    The trends.min.js SDK contains a critical vulnerability in $Trd_Utils.sendGa4Tracking:
+
+    ```javascript
+    $Trd_Utils.sendGa4Tracking = function(ctaParams, event, page) {
+      var trackingCodeToEval;
+      switch(event) {
+        case "load":
+          trackingCodeToEval = ctaParams.CustomImpressionTrackingCode;
+          break;
+        case "click":
+          trackingCodeToEval = ctaParams.CustomClickTrackingCode;
+          break;
+      }
+      return (null == trackingCodeToEval ? void 0 : trackingCodeToEval.length)
+        ? eval(trackingCodeToEval)  // <-- ARBITRARY CODE EXECUTION
+        : dataLayer.push(...)
+    }
+    ```
+
+    Any TrenDemon customer (or attacker compromising CTA configuration) can execute
+    arbitrary JavaScript in visitor browsers.
+
+    ## Marketo Cookie Harvesting
+
+    TrenDemon reads Marketo _mkto_trk cookie, Base64-encodes it, stores as
+    trd_ma_cookie, and transmits to trackingapi.trendemon.com/api/experience/personal.
+
+    Evidence pattern:
+    ```json
+    {
+      "name": "trd_ma_cookie",
+      "value": "[BASE64_ENCODED_MARKETO_TOKEN]"
+    }
+    ```
+
+    Decoded format: `id:[MARKETO_ACCOUNT_ID]&token:_mch-[DOMAIN]-[SESSION_TOKEN]`
+
+    ## Fingerprint Hashing and Anti-Analysis
+
+    The script uses a multi-stage process to generate and exfiltrate a persistent user fingerprint.
+
+    1.  **Dynamic Library Loading:** The main `trends.min.js` script dynamically loads a secondary library, `identity.min.js`, which contains the core fingerprinting and hashing logic.
+    2.  **MurmurHash3 Implementation:** After collecting fingerprinting data, the script calls `$Trd_Identity.x64hash128` to generate a 128-bit non-cryptographic hash (MurmurHash3). This hash serves as the stable, long-term identifier for the user's device.
+    3.  **Anti-Analysis Techniques:** The script contains a function (`$Trd_Utils.cleanUrlParameters`) that removes a long list of URL query parameters before processing. While many are legitimate marketing parameters, the list also includes keywords designed to evade security analysis, such as `trd_debug`, `admin_preview`, and `preview`. This prevents researchers from easily enabling debug modes or observing the script's full behavior.
+    4.  **Comprehensive Data Collection:** The `identity.min.js` library collects a wide array of data points to generate the fingerprint, including:
+        - `userAgent`, `language`, `platform`, `cpuClass`
+        - `screenResolution`, `colorDepth`, `deviceMemory`, `hardwareConcurrency`
+        - `plugins`, `webglVendorAndRenderer`, `touchSupport`
+        - Anti-fraud checks: `webdriver`, `adBlock`, `hasLiedOs`, `hasLiedBrowser`
+        - Storage support: `sessionStorage`, `localStorage`, `indexedDb`
+
+    Evidence pattern (from `trends.min.js`):
+    ```javascript
+    // Hashing call
+    o = $Trd_Identity.x64hash128(i.join(""), 31), n(o)
+
+    // Anti-analysis parameter stripping
+    $Trd_Utils.cleanUrlParameters = function(t) {
+        ["utm_source", ..., "gclid", ..., "trd_debug", "admin_preview", "preview", ...].forEach((function(n) {
+            t.delete(n)
+        }));
+        //...
+    }
+    ```
+
+    ## Evasive Worker-Based Fingerprinting
+
+    The primary `trends.min.js` script dynamically creates a JavaScript Blob and spawns it within a Web Worker to perform advanced, evasive browser fingerprinting. This technique is used to generate a stable, persistent identifier for the user's device that survives cookie deletion.
+
+    The worker executes canvas-based tests to fingerprint the browser's text and emoji rendering engine, which is highly specific to the user's OS, browser version, and hardware. The results are sent back to the main script via `postMessage()` and combined into a final fingerprint hash.
+
+    Key fingerprinting techniques observed:
+    - **Unicode Rendering Probes:** Tests how the browser renders complex emojis and flags (e.g., transgender flag) by comparing Zero-Width Joiner (ZWJ, U+200D) vs. Zero-Width Space (ZWSP, U+200B) renderings.
+    - **Canvas Pixel Reading:** Extracts pixel data from a canvas element to create a hash based on the rendering output.
+    - **OffscreenCanvas in Worker:** Utilizes `OffscreenCanvas` for performance and to hide the fingerprinting activity from the main browser thread.
+
+    Evidence pattern (captured blob):
+    ```json
+    {
+      "blobUrl": "blob:https://trendemon.com/38876f46-47a4-4b3e-8c56-3242d7923cc2",
+      "blobType": "text/javascript",
+      "patterns": [
+        "canvas_fingerprint",
+        "canvas_pixel_read",
+        "emoji_fingerprint",
+        "unicode_probe",
+        "worker_fingerprint",
+        "worker_exfil"
+      ]
+    }
+    ```
+
+  cookie_analysis:
+    long_lived:
+      - cookie: "trd_vid_{accountId}"
+        domain: "trackingapi.trendemon.com"
+        lifetime: "760 days"
+        severity: HIGH
+
+      - cookie: "trd_gavid_{accountId}"
+        domain: "trackingapi.trendemon.com"
+        lifetime: "760 days"
+        severity: HIGH
+
+      - cookie: "trd_gvid"
+        domain: "trackingapi.trendemon.com"
+        lifetime: "760 days"
+        severity: HIGH
+
+      - cookie: "trd_ma_cookie"
+        domain: ".{customer_domain}"
+        purpose: "Harvested Marketo cookie (Base64 encoded)"
+        severity: HIGH
+
+    local_storage:
+      - name: "trd_vid_l"
+        purpose: "Persistent visitor ID backup"
+        lifetime: "Infinite"
+      - name: "trd_vuid_l"
+        purpose: "Persistent visitor UID backup"
+        lifetime: "Infinite"
+
+  code_evidence:
+    - language: javascript
+      description: "eval() #1 - GA4 Custom Tracking (line 475)"
+      code: |
+        // sendGa4Tracking function - executes customer-provided tracking code
+        case "load": trackingCodeToEval = ctaParams.CustomImpressionTrackingCode;
+        case "click": trackingCodeToEval = ctaParams.CustomClickTrackingCode;
+        return (trackingCodeToEval?.length) ? eval(trackingCodeToEval) : ...
+      source_file: "https://assets.trendemon.com/tag/trends.min.js:475"
+
+    - language: javascript
+      description: "eval() #2 - Exit Intent Action Script (line 2561)"
+      code: |
+        actionScript = this.ctaParams.exitintent_actionscript ||
+                       this.ctaParams.actionscript || "";
+        useActionScript && actionScript.length && eval(actionScript);
+      source_file: "https://assets.trendemon.com/tag/trends.min.js:2561"
+
+    - language: javascript
+      description: "eval() #3 - Form Script Injection (line 5064)"
+      code: |
+        // Executes arbitrary script after form processing
+        eval(scriptToRun);
+      source_file: "https://assets.trendemon.com/tag/trends.min.js:5064"
+
+    - language: javascript
+      description: "eval() #4 - Embedded CTA Script (line 7612)"
+      code: |
+        // Executes inline script content from CTA elements
+        eval(script.innerText);
+      source_file: "https://assets.trendemon.com/tag/trends.min.js:7612"
+
+    - language: javascript
+      description: "eval() #5 - Post-Completion Script (line 10804)"
+      code: |
+        // Executes script after personalization experience completes
+        (personal.postCompletionScript?.length) && eval(personal.postCompletionScript);
+      source_file: "https://assets.trendemon.com/tag/trends.min.js:10804"
+
+    - language: javascript
+      description: "eval() #6 - Duplicate GA4 Handler (line 11985)"
+      code: |
+        // Secondary GA4 tracking code execution path
+        eval(trackingCodeToEval);
+      source_file: "https://assets.trendemon.com/tag/trends.min.js:11985"
+
+    - language: http
+      description: "Marketo cookie exfiltration pattern"
+      code: |
+        GET /api/experience/personal?
+          AccountId=[ACCOUNT_ID]&
+          ClientUrl=[PAGE_URL]&
+          MarketingAutomationCookie=id:[MARKETO_ID]&token:[TOKEN]&
+          vid=[VISITOR_ID]
+        Host: trackingapi.trendemon.com
+      source_file: "HAR evidence"
+
+    - language: javascript
+      description: "polyfill.io supply chain vulnerability"
+      code: |
+        t.prototype.loadPollyills = function (t) {  // Note: MISSPELLED
+          if (Array.prototype.findIndex) t();  // Modern browser - skip
+          else {
+            var e = document.createElement("script");
+            e.src = "https://polyfill.io/v3/polyfill.min.js?features=...";
+            // LOADS FROM COMPROMISED DOMAIN ON OLDER BROWSERS (IE11, Safari <9)
+          }
+        };
+      source_file: "https://assets.trendemon.com/tag/trends.min.js"
+
+    - language: javascript
+      description: "De-obfuscated fingerprinting worker payload from blob"
+      code: |
+        // This IIFE runs inside a Web Worker, created from a dynamic blob.
+        // Its return value (the fingerprint results) is sent back to the main thread.
+        postMessage(
+          (function orchestrator(testsToRun, testRunner, pixelComparer, pixelChecker) {
+            // Use OffscreenCanvas for better performance in a worker.
+            const canvas = new OffscreenCanvas(300, 150);
+            const ctx = canvas.getContext("2d", { willReadFrequently: true });
+            ctx.textBaseline = "top";
+            ctx.font = "600 32px Arial";
+
+            const results = {};
+            testsToRun.forEach(function (testName) {
+              results[testName] = testRunner(ctx, testName, pixelComparer, pixelChecker);
+            });
+            return results;
+          })(
+            ["flag", "emoji"], // The list of tests to execute.
+            function testRunner(ctx, testName, pixelComparer, pixelChecker) {
+              switch (testName) {
+                case "flag":
+                  // Sophisticated Unicode rendering test (ZWJ vs ZWSP).
+                  // Compares: "\ud83c\udff3\ufe0f\u200d\u26a7\ufe0f" (with ZWJ)
+                  //      vs:  "\ud83c\udff3\ufe0f\u200b\u26a7\ufe0f" (with ZWSP)
+                  return pixelComparer(ctx, TRANS_FLAG_ZWJ, TRANS_FLAG_ZWSP) ? false
+                    : !pixelComparer(ctx, FLAG_CQ_ZWJ, FLAG_CQ_ZWSP)
+                      && !pixelComparer(ctx, FLAG_ENG_ZWJ, FLAG_ENG_ZWSP);
+                case "emoji":
+                  // Checks if window emoji (\ud83e\udedf) renders anything.
+                  return !pixelChecker(ctx, WINDOW_EMOJI);
+              }
+              return false;
+            },
+            /* ... pixel comparison and checking utility functions ... */
+          )
+        );
+
+        // Unicode constants (escaped for display):
+        // TRANS_FLAG_ZWJ:  \ud83c\udff3\ufe0f\u200d\u26a7\ufe0f (transgender flag with ZWJ)
+        // TRANS_FLAG_ZWSP: \ud83c\udff3\ufe0f\u200b\u26a7\ufe0f (same but ZWSP instead)
+        // FLAG_CQ_ZWJ:     \ud83c\udde8\ud83c\uddf6 (regional flag)
+        // FLAG_ENG_ZWJ:    \ud83c\udff4\udb40\udc67\udb40\udc62\udb40\udc65\udb40\udc6e\udb40\udc67\udb40\udc7f (England)
+        // WINDOW_EMOJI:    \ud83e\udedf
+      source_file: "blob:https://trendemon.com/38876f46-47a4-4b3e-8c56-3242d7923cc2"
+
+    - language: javascript
+      description: "MurmurHash3 (128-bit x64) implementation from identity.min.js"
+      code: |
+        var x64hash128 = function(key, seed) {
+            key = key || '';
+            seed = seed || 0;
+            var remainder = key.length % 16;
+            var bytes = key.length - remainder;
+            var h1 = [0, seed];
+            var h2 = [0, seed];
+            var k1 = [0, 0];
+            var k2 = [0, 0];
+            var c1 = [2277735313, 289559509];
+            var c2 = [1291169091, 658871167];
+
+            // ... main hashing loop and finalization steps ...
+
+            return (('00000000' + (h1[0] >>> 0).toString(16)).slice(-8) +
+                    ('00000000' + (h1[1] >>> 0).toString(16)).slice(-8) +
+                    ('00000000' + (h2[0] >>> 0).toString(16)).slice(-8) +
+                    ('00000000' + (h2[1] >>> 0).toString(16)).slice(-8));
+        }
+      source_file: "https://assets.trendemon.com/tag/identity.min.js"
+
+  supply_chain_vulnerability:
+    polyfill_io:
+      status: CRITICAL
+      compromised_date: "2024-06-25"
+      acquired_by: "Funnull CDN (Chinese)"
+      impact: "100,000+ websites compromised"
+      trigger_condition: "Fires when Array.prototype.findIndex unavailable (IE11, Safari < 9, older mobile)"
+      trendemon_status: "Production code STILL references compromised domain"
+      note: "polyfill.io was acquired and began injecting malicious redirects/code. TrenDemon has not patched."
+
+  network_evidence:
+    - method: GET
+      url: "https://trackingapi.trendemon.com/api/settings/{accountId}"
+      description: "Configuration fetch"
+
+    - method: GET
+      url: "https://trackingapi.trendemon.com/api/events/pageview"
+      description: "Page view tracking with Base64-encoded URL"
+
+    - method: GET
+      url: "https://trackingapi.trendemon.com/api/events/pageread"
+      description: "Content read tracking"
+
+    - method: GET
+      url: "https://trackingapi.trendemon.com/api/experience/personal"
+      description: "Personalization + Marketo cookie exfiltration"
+
+    - method: GET
+      url: "https://trackingapi.trendemon.com/api/experience/ace-campaign"
+      description: "Campaign targeting"
+
+infrastructure:
+  domains:
+    - domain: "trackingapi.trendemon.com"
+      purpose: "Primary API endpoint"
+      risk: HIGH
+
+    - domain: "assets.trendemon.com"
+      purpose: "Script delivery (trends.min.js)"
+      risk: HIGH
+
+  scripts:
+    - url: "https://assets.trendemon.com/tag/trends.min.js"
+      signatures:
+        - "$Trd_Utils"
+        - "$Trd_Tools"
+        - "sendGa4Tracking"
+        - "CustomImpressionTrackingCode"
+        - "CustomClickTrackingCode"
+        - "trendemon"
+
+# Account config structure (pattern, not actual values)
+account_config_pattern:
+  accountId: "[NUMERIC_ID]"
+  ma_system: "marketo|hubspot|pardot|acton|salesforce"
+  clientApps: "[CUSTOMER_APPS]"
+  identify: true
+  contentFetchDomain: "[CUSTOMER_LIBRARY_DOMAIN]"
+  isActive: true
+  aceSupport: true
+  ctaCount: "[NUM_CTAS]"
+  googleAnalyticsTrack: true
+
+identity_chain:
+  description: |
+    TrenDemon visitor ID links through Marketo to 6sense to Epsilon,
+    enabling full deanonymization chain.
+  chain:
+    - stage: 1
+      identifier: "TrenDemon visitor ID"
+      value: "[VISITOR_ID]"
+    - stage: 2
+      identifier: "Marketo ID"
+      value: "[MARKETO_ACCOUNT_ID]"
+    - stage: 3
+      identifier: "6sense UUID"
+      value: "[6SENSE_UUID]"
+    - stage: 4
+      identifier: "Epsilon Company ID"
+      value: "[EPSILON_COMPANY_ID]"
+    - stage: 5
+      identifier: "Deanonymized Entity"
+      value: "[BUSINESS_ENTITY]"
+
+base64_obfuscation:
+  finding: |
+    TrenDemon Base64-encodes tracked page URLs to evade content blockers
+    and privacy tools.
+  examples:
+    - pattern: "aHR0cHM6Ly... (Base64 encoded URL)"
+      note: "URLs are Base64 encoded to evade pattern matching"
+
+ironic_tracking:
+  finding: "TrenDemon actively tracks visits to privacy-related pages"
+  pages_tracked:
+    - "/privacy-policy/"
+    - "/privacy-center/"
+    - "/trust/"
+
+supported_ma_systems:
+  - name: marketo
+    cookie_harvested: "_mkto_trk"
+    evidence: "Base64 encoded in trd_ma_cookie"
+  - name: hubspot
+    cookie_harvested: "hubspotutk"
+    evidence: "Harvested via LeadFeeder foreignCookieSettings"
+  - name: pardot
+    cookie_harvested: "visitor_id*"
+    evidence: "Polled by Demandbase tag (5s window)"
+  - name: acton
+    cookie_harvested: null
+  - name: salesforce
+    cookie_harvested: null
+
+signals:
+  - type: code.eval
+    pattern: "eval\\(trackingCodeToEval\\)"
+    description: "Arbitrary code execution via eval()"
+    confidence: 0.99
+
+  - type: cookie.extreme_lifetime
+    pattern: "trd_vid.*760"
+    description: "760-day tracking cookie"
+    confidence: 0.99
+
+  - type: cross_vendor.cookie_harvesting
+    pattern: "MarketingAutomationCookie"
+    description: "Marketo cookie exfiltration"
+    confidence: 0.99
+
+  - type: obfuscation.base64_url
+    pattern: "url=aH[A-Za-z0-9+/]+"
+    description: "Base64-encoded URL tracking"
+    confidence: 0.95
+
+  - type: supply_chain.compromised_domain
+    pattern: "polyfill\\.io/v3/polyfill"
+    description: "polyfill.io supply chain - domain compromised June 2024"
+    confidence: 0.99
+
+  - type: code.typo_indicator
+    pattern: "loadPollyills"
+    description: "Misspelled function name (loadPollyills vs loadPolyfills)"
+    confidence: 0.99
+
+  - type: fingerprinting.canvas_unicode
+    pattern: "n(e,\"\\ud83c\\udff3\\ufe0f\\u200d\\u26a7\\ufe0f\",\"\\ud83c\\udff3\\ufe0f\\u200b\\u26a7\\ufe0f\")"
+    description: "Canvas fingerprinting using ZWJ/ZWSP Unicode comparison"
+    confidence: 0.99
+
+  - type: fingerprinting.hashing
+    pattern: "$Trd_Identity.x64hash128"
+    description: "MurmurHash3 (128-bit) used to generate stable fingerprint"
+    confidence: 0.99
+
+  - type: anti_analysis.param_stripping
+    pattern: "trd_debug|admin_preview"
+    description: "Strips URL parameters to evade security analysis"
+    confidence: 0.90
+
+  - type: fingerprinting.blob_worker
+    pattern: "OffscreenCanvas.*postMessage|WorkerGlobalScope.*canvas"
+    description: "Blob-based worker fingerprinting evasion technique"
+    confidence: 0.95
+
+  - type: fingerprinting.emoji_probe
+    pattern: "\\[\"flag\",\\s*\"emoji\"\\]"
+    description: "Emoji/flag rendering fingerprint test array"
+    confidence: 0.98
+
+  - type: fingerprinting.zwj_zwsp_compare
+    pattern: "\\u200d.*\\u200b|\\u200b.*\\u200d"
+    description: "ZWJ vs ZWSP unicode comparison for canvas fingerprinting"
+    confidence: 0.95
+
+law_touchpoints:
+  - statute: "GDPR Art. 5(1)(e)"
+    jurisdiction: European Union
+    violation: "Storage limitation - 760-day cookie retention"
+
+  - statute: "GDPR Art. 6"
+    jurisdiction: European Union
+    violation: "No valid legal basis for cross-vendor cookie sharing"
+
+  - statute: "CCPA 1798.140"
+    jurisdiction: California
+    violation: "Cross-vendor data sharing may constitute 'sale' of PI"
+
+  - statute: "ePrivacy Directive Art. 5(3)"
+    jurisdiction: European Union
+    violation: "Cookie consent required before setting tracking cookies"
+
+cvss_estimate:
+  eval_vulnerability: 9.8
+  rationale: |
+    Network/Low/None/Changed/High/High/High - Any TrenDemon customer
+    can execute arbitrary JavaScript in visitor browsers via CTA configuration.
+
+remediation:
+  for_website_owners:
+    - action: "Remove TrenDemon scripts from site"
+      priority: immediate
+    - action: "Block trackingapi.trendemon.com at firewall/CDN"
+      priority: immediate
+    - action: "Audit Marketo integration for cookie leakage"
+      priority: short_term
+
+  for_visitors:
+    - action: "Block trendemon.com domains in browser/network"
+      priority: immediate
+    - action: "Clear trd_* cookies and localStorage"
+      priority: immediate
+
+iocs:
+  file_hashes:
+    - file: "trends.min.js"
+      sha256: "84b1729f3fe0c831b7895e6d30da0086bcc1f17305daa6097e62e0c261fa4fbe"
+      size: "359KB"
+      captured: "2025-12-04"
+
+    - file: "identity.min.js"
+      sha256: "1220bdf087a7b3b0f068e1dc2422c361ef11cf999ff8ea343573d9e5a7c19bdc"
+      size: "18KB"
+      captured: "2025-12-04"
+
+  domains:
+    # Primary infrastructure
+    - domain: "trackingapi.trendemon.com"
+      type: api
+      risk: CRITICAL
+
+    - domain: "assets.trendemon.com"
+      type: cdn
+      risk: CRITICAL
+
+    - domain: "trendemon.com"
+      type: primary
+      risk: HIGH
+
+    # Supply chain - COMPROMISED
+    - domain: "polyfill.io"
+      type: supply_chain
+      risk: CRITICAL
+      note: "Compromised June 2024 - acquired by Funnull CDN"
+
+  urls:
+    - "https://assets.trendemon.com/tag/trends.min.js"
+    - "https://assets.trendemon.com/global/identity.min.js"
+    - "https://polyfill.io/v3/polyfill.min.js"
+
+  api_endpoints:
+    - path: "/api/settings/{accountId}"
+      method: GET
+      purpose: "Configuration fetch"
+
+    - path: "/api/events/pageview"
+      method: GET
+      purpose: "Page view tracking (Base64 URL)"
+
+    - path: "/api/events/pageread"
+      method: GET
+      purpose: "Content engagement tracking"
+
+    - path: "/api/experience/personal"
+      method: GET
+      purpose: "Personalization + MA cookie exfiltration"
+
+    - path: "/api/experience/personal-stream"
+      method: GET
+      purpose: "Real-time personalization stream"
+
+    - path: "/api/experience/personal-embedded"
+      method: GET
+      purpose: "Embedded widget personalization"
+
+    - path: "/api/experience/ace-campaign"
+      method: GET
+      purpose: "Campaign targeting"
+
+    - path: "/api/Identity/me"
+      method: GET
+      purpose: "Visitor identity resolution"
+
+    - path: "/api/marketingautomation"
+      method: GET
+      purpose: "MA system integration"
+
+  cookies:
+    # Long-lived tracking (760 days / YEAR 9999)
+    - name: "trd_vid_{accountId}"
+      domain: ".trendemon.com"
+      lifetime: "760 days"
+      purpose: "Primary visitor ID"
+
+    - name: "trd_gavid_{accountId}"
+      domain: ".trendemon.com"
+      lifetime: "760 days"
+      purpose: "GA-linked visitor ID"
+
+    - name: "trd_gvid"
+      domain: ".trendemon.com"
+      lifetime: "760 days"
+      purpose: "Global visitor ID"
+
+    # Session/functional
+    - name: "trd_session"
+      domain: ".{customer_domain}"
+      lifetime: "Session"
+      purpose: "Session tracking"
+
+    - name: "trd_cid"
+      domain: ".{customer_domain}"
+      lifetime: "Session"
+      purpose: "Client ID"
+
+    # Cross-vendor harvesting
+    - name: "trd_ma_cookie"
+      domain: ".{customer_domain}"
+      lifetime: "Session"
+      purpose: "Harvested Marketo/HubSpot cookie (Base64)"
+      severity: HIGH
+
+  localstorage_keys:
+    - key: "trd_vid_l"
+      purpose: "Persistent visitor ID backup"
+      lifetime: "Infinite"
+
+    - key: "trd_vuid_l"
+      purpose: "Persistent visitor UID backup"
+      lifetime: "Infinite"
+
+  request_headers:
+    - header: "Referer"
+      note: "Full page URL sent with all requests"
+
+    - header: "Cookie"
+      note: "All trd_* cookies + harvested MA cookies"
+
+  script_signatures:
+    - pattern: "$Trd_Utils"
+      confidence: 0.99
+
+    - pattern: "$Trd_Tools"
+      confidence: 0.99
+
+    - pattern: "$Trd_Identity"
+      confidence: 0.99
+
+    - pattern: "sendGa4Tracking"
+      confidence: 0.95
+
+    - pattern: "loadPollyills"
+      confidence: 0.99
+      note: "Misspelled - unique fingerprint"
+
+    - pattern: "CustomImpressionTrackingCode"
+      confidence: 0.95
+
+    - pattern: "CustomClickTrackingCode"
+      confidence: 0.95
+
+    - pattern: "x64hash128"
+      confidence: 0.90
+      note: "MurmurHash3 implementation"
+
+blocklist:
+  domains:
+    - "trackingapi.trendemon.com"
+    - "assets.trendemon.com"
+    - "trendemon.com"
+    - "polyfill.io"
+
+  cookie_patterns:
+    - "trd_*"
+    - "trd_vid_*"
+    - "trd_gavid_*"
+    - "trd_ma_cookie"
+
+  script_signatures:
+    - "trends.min.js"
+    - "identity.min.js"
+    - "$Trd_Utils"
+    - "$Trd_Tools"
+    - "$Trd_Identity"
+    - "loadPollyills"
+    - "trendemon"
+
+related_advisories:
+  - id: BTI-2025-0023
+    relationship: "Parent investigation (6sense surveillance stack)"
+
+references:
+  - title: "TrenDemon Website"
+    url: https://trendemon.com
+    type: vendor
+
+  - title: "TrenDemon SDK"
+    url: https://assets.trendemon.com/tag/trends.min.js
+    type: script
+
+  - title: "TrenDemon Settings API Pattern"
+    url: https://trackingapi.trendemon.com/api/settings/{accountId}
+    type: api
+
+metadata:
+  created: "2025-12-04T00:00:00Z"
+  updated: "2025-12-07T00:00:00Z"
+  author: "Blackout Threat Intelligence"
+  version: 2
+  status: active
+  sanitized: true
+  human_readable: "./README.md"
+  tags:
+    - eval-vulnerability
+    - arbitrary-code-execution
+    - cross-vendor-cookie-harvesting
+    - extreme-cookie-lifetime
+    - base64-obfuscation
+    - marketo-integration
+    - abm-platform
+    - critical
