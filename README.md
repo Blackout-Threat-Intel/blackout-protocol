@@ -23,8 +23,8 @@ This repository contains **technical findings, IOCs, and remediation playbooks**
 
 | Directory | Contents |
 |-----------|----------|
+| **[advisories/](./advisories/)** | BTI advisory records (YAML + README per advisory) |
 | **[FRAMEWORK/](./FRAMEWORK/)** | Threat models, architecture analysis, remediation playbooks |
-| **[FRAMEWORK/advisories/](./FRAMEWORK/advisories/)** | BTI advisory records (YAML format) |
 | **[KITS/](./KITS/)** | Deployment guides and implementation references |
 
 ---
@@ -33,8 +33,9 @@ This repository contains **technical findings, IOCs, and remediation playbooks**
 
 | Vendor | BTI ID | Severity | Status |
 |--------|--------|----------|--------|
-| **6sense / TrenDemon** | BTI-2025-0025 | CRITICAL | [Playbook](./FRAMEWORK/REMEDIATION-PLAYBOOK-TRENDEMON.md) |
-| RB2B (Retention.com) | BTI-2025-0001 | CRITICAL | [Playbook](./FRAMEWORK/REMEDIATION-PLAYBOOK.md) |
+| **6sense** | [BTI-2025-0023](./advisories/BTI-2025-0023/) | CRITICAL | [Playbook](./FRAMEWORK/REMEDIATION-PLAYBOOK-TRENDEMON.md) |
+| **TrenDemon** | [BTI-2025-0025](./advisories/BTI-2025-0025/) | CRITICAL | [Playbook](./FRAMEWORK/REMEDIATION-PLAYBOOK-TRENDEMON.md) |
+| RB2B (Retention.com) | — | CRITICAL | [Playbook](./FRAMEWORK/REMEDIATION-PLAYBOOK.md) |
 
 ---
 
@@ -49,7 +50,7 @@ This repository contains **technical findings, IOCs, and remediation playbooks**
 | **DemonScript** | eval() arbitrary code execution | 9.8 | Any TrenDemon customer can execute JS on your visitors |
 | **PollyWannaCrack** | polyfill.io supply chain | 10.0 | Chinese malware loaded on older browsers |
 | **ZeroSense** | Cross-customer PII cache | 9.1 | Phone/address cached 760 days across ALL 6sense customers |
-| **RollCredits** | Video completion RCE | 9.8 | Wistia/Brightcove videos trigger eval() |
+| **RollCredits** | Video completion ACE | 9.8 | Wistia/Brightcove videos trigger eval() |
 | **MaCook'd** | Marketo cookie theft | 7.5 | _mkto_trk Base64'd and exfiltrated |
 
 ### Verify It Yourself

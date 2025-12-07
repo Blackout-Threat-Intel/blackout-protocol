@@ -15,17 +15,21 @@ import { PolicyDecision, PolicyResult } from './types'
 // =============================================================================
 
 /**
- * Primary kill list targeting RB2B surveillance infrastructure.
+ * Kill list targeting surveillance infrastructure.
  * Patterns support:
  * - Exact domain match: 'rb2b.com'
  * - Wildcard subdomain: '*.rb2b.com' (matches any.rb2b.com)
+ *
+ * Sources:
+ * - BTI-2025-0023: 6sense surveillance stack
+ * - BTI-2025-0025: TrenDemon eval() ACE + polyfill.io supply chain
  */
 const KILL_LIST: string[] = [
-  // RB2B Core Domains
+  // ==========================================================================
+  // RB2B (Retention.com) - Visitor Deanonymization
+  // ==========================================================================
   'rb2b.com',
   '*.rb2b.com',
-
-  // Known RB2B subdomains (explicit for clarity)
   'api.rb2b.com',
   'cdn.rb2b.com',
   'track.rb2b.com',
@@ -35,15 +39,37 @@ const KILL_LIST: string[] = [
   'data.rb2b.com',
   'collect.rb2b.com',
   'ingest.rb2b.com',
-
-  // RB2B Alternative TLDs
   'rb2b.io',
   '*.rb2b.io',
   'rb2b.net',
   '*.rb2b.net',
-
-  // RB2B CDN (CloudFront distribution)
   'ddwl4m2hdecbv.cloudfront.net',
+
+  // ==========================================================================
+  // TrenDemon (BTI-2025-0025) - eval() ACE + polyfill.io supply chain
+  // ==========================================================================
+  'trendemon.com',
+  '*.trendemon.com',
+  'trackingapi.trendemon.com',
+  'assets.trendemon.com',
+
+  // ==========================================================================
+  // 6sense (BTI-2025-0023) - PII Deanonymization + Cookie Harvesting
+  // ==========================================================================
+  '6sc.co',
+  '*.6sc.co',
+  'eps.6sc.co',
+  'b.6sc.co',
+  'j.6sc.co',
+  'v.eps.6sc.co',
+  'epsilon.6sense.com',
+
+  // ==========================================================================
+  // Supply Chain Compromise - polyfill.io (Funnull CDN)
+  // Compromised June 2024, injected malware into 100K+ sites
+  // ==========================================================================
+  'polyfill.io',
+  '*.polyfill.io',
 ]
 
 // =============================================================================

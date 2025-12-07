@@ -26,7 +26,7 @@ severity:
 summary: |
   TrenDemon is an ABM (Account-Based Marketing) content personalization platform.
   Critical findings include: (1) 6 eval() functions executing arbitrary JavaScript
-  from CTA parameters enabling customer-level RCE, (2) polyfill.io supply chain
+  from CTA parameters enabling customer-level ACE, (2) polyfill.io supply chain
   vulnerability loading from COMPROMISED domain (June 2024), (3) 760-day cookie
   retention violating GDPR/ICO guidelines, (4) Cross-vendor Marketo cookie harvesting,
   (5) Base64 URL obfuscation to evade privacy tools.

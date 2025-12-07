@@ -404,7 +404,7 @@ related_advisories:
   - id: BTI-2025-0022
     relationship: "6sense deploys Ketch CMP documented as defeat device"
   - id: BTI-2025-0025
-    relationship: "6sense deploys TrenDemon with eval() RCE and polyfill.io vulnerability"
+    relationship: "6sense deploys TrenDemon with eval() ACE and polyfill.io vulnerability"
 
 metadata:
   created: "2025-12-03T00:00:00Z"

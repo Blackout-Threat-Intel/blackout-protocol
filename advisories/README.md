@@ -6,6 +6,7 @@ Security advisories for B2B marketing technology surveillance and privacy violat
 
 | ID | Vendor | Severity | Summary |
 |----|--------|----------|---------|
+| [BTI-2025-0023](./BTI-2025-0023/) | 6sense | **CRITICAL** | PII deanonymization, 760-day cookies, Ketch CMP bypass |
 | [BTI-2025-0025](./BTI-2025-0025/) | TrenDemon | **CRITICAL** | eval() ACE, polyfill.io supply chain, cross-vendor cookie harvesting |
 
 ## Structure

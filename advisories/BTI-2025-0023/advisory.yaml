@@ -1,0 +1,160 @@
+id: BTI-2025-0023
+title: 6sense CMP Cookie Harvesting - Cross-Vendor Identity Aggregation via Ketch
+
+vendor:
+  name: 6sense
+  website: https://6sense.com
+  parent_company: null
+  aliases: []
+  related_vendors:
+    - name: Ketch
+      role: CMP provider (BTI-2025-0022)
+    - name: Marketo
+      role: Marketing automation (cookie harvested)
+    - name: TrenDemon
+      role: ABM personalization (BTI-2025-0025)
+
+category: BTI-C12
+subcategories:
+  - BTI-C01  # B2B Visitor Identification
+  - BTI-C08  # Cookie Syncing (13 hosts, 17 hash exfils)
+  - BTI-C10  # Device Fingerprinting (6si.fppoc.dist.js)
+  - BTI-C11  # CMP Defeat Device (Ketch)
+  - BTI-C12  # Cross-Vendor Identity Aggregation
+  - BTI-C13  # Extreme Retention (6suuid 760 days)
+  - BTI-C14  # PII Deanonymization (epsilon endpoints)
+  - BTI-C15  # Cookie/Header Security Failures (AWSALB)
+
+severity:
+  btss_score: 9.2
+  level: CRITICAL
+  breakdown:
+    exploitability: 3.0      # CMP harvests first-party vendor cookies
+    data_sensitivity: 3.0    # PII double-exfil: epsilon returns phone, beacon re-transmits
+    prevalence: 2.2          # 6sense is major B2B intent data provider
+    detection_difficulty: 1.0 # Visible in HAR but requires URL decoding
+
+summary: |
+  A SINGLE PAGE LOAD on 6sense.com triggers an extraordinary surveillance cascade:
+  13 hosts syncing cookies, 17 hash exfiltrations, PII deanonymization (name + phone),
+  a CMP defeat device harvesting pre-consent data, and TrenDemon SDK with eval()-based
+  arbitrary code execution loading from the compromised polyfill.io domain.
+
+iocs:
+  domains:
+    - domain: "6sc.co"
+      type: primary
+      risk: CRITICAL
+    - domain: "eps.6sc.co"
+      type: api
+      risk: CRITICAL
+      purpose: "PII deanonymization (Epsilon)"
+    - domain: "b.6sc.co"
+      type: beacon
+      risk: CRITICAL
+      purpose: "PII re-exfiltration"
+    - domain: "j.6sc.co"
+      type: cdn
+      risk: HIGH
+      purpose: "Tag loader"
+    - domain: "v.eps.6sc.co"
+      type: api
+      risk: CRITICAL
+      purpose: "Epsilon failover"
+    - domain: "epsilon.6sense.com"
+      type: api
+      risk: CRITICAL
+      purpose: "PII deanonymization"
+    - domain: "global.ketchcdn.com"
+      type: cmp
+      risk: HIGH
+      purpose: "Consent defeat device"
+    - domain: "cdn.ketchjs.com"
+      type: cdn
+      risk: HIGH
+      purpose: "Ketch CMP scripts"
+
+  cookies:
+    - name: "6suuid"
+      lifetime: "760 days"
+      domain: ".6sc.co"
+      purpose: "6sense fingerprint"
+      risk: CRITICAL
+    - name: "_6sft"
+      lifetime: "760 days"
+      purpose: "First touch attribution"
+      risk: HIGH
+
+  detection_patterns:
+    - pattern: "ketchcdn\\.com.*_mkto_trk"
+      type: network
+      description: "Ketch harvesting Marketo cookie"
+    - pattern: "eps\\.6sc\\.co/v3/company"
+      type: network
+      description: "Epsilon PII lookup"
+    - pattern: "b\\.6sc\\.co.*metadata\\.ores"
+      type: network
+      description: "PII beacon re-exfiltration"
+
+technical_details:
+  cookie_sync_chain:
+    total_hosts: 13
+    total_hash_exfils: 17
+
+  epsilon_payload:
+    endpoints:
+      - "epsilon.6sense.com/v3/company/details"
+      - "eps.6sc.co/v3/company/details"
+    fields_exposed:
+      - company
+      - domain
+      - name (PII)
+      - phone (PII)
+      - address
+      - city
+      - state
+      - country
+      - industry
+
+  ketch_dark_pattern:
+    reject_button_selector_length: 2847
+    dom_depth: 14
+    clicks_to_accept: 1
+    clicks_to_reject: 3
+
+legal_implications:
+  - statute: "GDPR Art. 5(1)(e)"
+    violation: "Storage limitation - 760-day cookie retention"
+  - statute: "GDPR Art. 13/14"
+    violation: "Failure to disclose specific processing purposes"
+  - statute: "CCPA 1798.100"
+    violation: "Cross-vendor data sharing without adequate disclosure"
+  - statute: "ePrivacy Art. 5(3)"
+    violation: "Cookie consent bypass via Ketch pre-consent harvesting"
+
+remediation:
+  immediate:
+    - "Block 6sc.co and all subdomains"
+    - "Block ketchcdn.com domains"
+    - "Audit Marketo integration for cookie leakage"
+
+  blocklist: |
+    ||6sc.co^
+    ||eps.6sc.co^
+    ||b.6sc.co^
+    ||j.6sc.co^
+    ||epsilon.6sense.com^
+    ||global.ketchcdn.com^
+    ||cdn.ketchjs.com^
+
+related_advisories:
+  - id: BTI-2025-0025
+    relationship: "TrenDemon eval() ACE loaded by 6sense"
+  - id: BTI-2025-0022
+    relationship: "Ketch CMP defeat device"
+
+metadata:
+  created: "2025-12-03"
+  updated: "2025-12-07"
+  author: "Blackout Threat Intelligence"
+  status: active
