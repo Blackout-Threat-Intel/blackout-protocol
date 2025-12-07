@@ -60,7 +60,9 @@ Log every blocked request. Build evidence. Know what you're stopping.
 
 ## Documentation
 
-- **[REMEDIATION-PLAYBOOK.md](./REMEDIATION-PLAYBOOK.md)** - Full IOCs, Keep vs Nuke fields, implementation guide
+- **[METHODOLOGY.md](./METHODOLOGY.md)** - How we distinguish threats from normal MarTech
+- **[REMEDIATION-PLAYBOOK.md](./REMEDIATION-PLAYBOOK.md)** - RB2B IOCs and remediation
+- **[REMEDIATION-PLAYBOOK-TRENDEMON.md](./REMEDIATION-PLAYBOOK-TRENDEMON.md)** - 6sense/TrenDemon zero-day disclosure
 - **[threat-model.md](./threat-model.md)** - What vendors extract and why it matters
 - **[architecture.md](./architecture.md)** - How network interception works
 

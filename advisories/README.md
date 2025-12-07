@@ -20,6 +20,18 @@ Each advisory folder contains:
   /evidence/       # Optional: supporting artifacts
 ```
 
+**Starting a new advisory?** Use [TEMPLATE.md](./TEMPLATE.md) as a base.
+
+## Methodology
+
+All advisories follow the [BLACKOUT Threat Intelligence Methodology](../FRAMEWORK/METHODOLOGY.md), which distinguishes:
+
+- **Security vulnerabilities** (eval() ACE, supply chain compromise)
+- **Privacy violations** (excessive retention, cross-vendor data theft)
+- **Evasion techniques** (worker fingerprinting, blob URLs)
+
+Standard marketing telemetry (page views, session cookies) is explicitly NOT flagged.
+
 ## Usage
 
 ### Human Readers
